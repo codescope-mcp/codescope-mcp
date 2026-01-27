@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "codescope": {
+      "command": "cargo",
+      "args": ["run", "--release"],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}",
+      "env": {
+        "RUST_LOG": "info"
+      }
+    }
+  }
+}
