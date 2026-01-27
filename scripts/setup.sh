@@ -6,7 +6,7 @@ set -e
 
 REPO="codescope-mcp/codescope-mcp"
 BINARY_NAME="codescope-mcp"
-VERSION="v0.1.2"
+VERSION="v0.1.3"
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
