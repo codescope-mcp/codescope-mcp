@@ -22,7 +22,7 @@ use crate::parser::GenericParser;
 pub struct FilePipeline {
     registry: Arc<LanguageRegistry>,
     workspace_root: PathBuf,
-    config: Arc<CodeScopeConfig>,
+    config: CodeScopeConfig,
     additional_excludes: Option<Vec<String>>,
 }
 
@@ -30,7 +30,7 @@ impl FilePipeline {
     pub fn new(
         registry: Arc<LanguageRegistry>,
         workspace_root: PathBuf,
-        config: Arc<CodeScopeConfig>,
+        config: CodeScopeConfig,
     ) -> Self {
         Self {
             registry,
@@ -70,6 +70,17 @@ impl FilePipeline {
     }
 
     /// Process files with the given collector
+    ///
+    /// # Implementation Note
+    ///
+    /// Each parallel thread creates its own `GenericParser` instance because
+    /// tree-sitter's `Parser` is not thread-safe and requires mutable access
+    /// during parsing. This is a deliberate tradeoff: while creating multiple
+    /// parser instances has some overhead, it enables parallel file processing
+    /// which significantly improves performance for large codebases.
+    ///
+    /// The `LanguageRegistry` is shared via `Arc` to avoid duplicating the
+    /// compiled queries and language grammars across threads.
     pub fn process<C, T>(&self, collector: &C) -> Vec<T>
     where
         C: ResultCollector<Item = T> + Sync,
@@ -80,6 +91,8 @@ impl FilePipeline {
         files
             .par_iter()
             .filter_map(|file_path| {
+                // Each thread needs its own Parser instance because tree-sitter's
+                // Parser requires mutable access and is not thread-safe.
                 let mut parser = match GenericParser::new(self.registry.clone()) {
                     Ok(p) => p,
                     Err(e) => {

@@ -22,7 +22,6 @@ use crate::server::types::{
     UsagesParams,
 };
 use crate::symbol::comment::get_code_at_location;
-use crate::symbol::types::CodeSnippet;
 
 /// CodeScope MCP Server
 #[derive(Clone)]
@@ -35,9 +34,20 @@ pub struct CodeScopeServer {
 
 #[tool_router]
 impl CodeScopeServer {
+    /// Create a new CodeScope server
+    ///
+    /// # Panics
+    ///
+    /// Panics if the language registry cannot be created. This can only happen
+    /// if the embedded tree-sitter queries are malformed, which would indicate
+    /// a programming error caught during development/testing rather than a
+    /// runtime failure.
     pub fn new() -> Self {
         let registry = Arc::new(
-            LanguageRegistry::new().expect("Failed to create language registry"),
+            LanguageRegistry::new().expect(
+                "Failed to create language registry: embedded queries are malformed. \
+                This is a programming error that should be caught during development."
+            ),
         );
 
         Self {
@@ -46,6 +56,18 @@ impl CodeScopeServer {
             registry,
             tool_router: Self::tool_router(),
         }
+    }
+
+    /// Try to create a new CodeScope server, returning an error if initialization fails
+    pub fn try_new() -> Result<Self, anyhow::Error> {
+        let registry = Arc::new(LanguageRegistry::new()?);
+
+        Ok(Self {
+            workspace_root: Arc::new(RwLock::new(None)),
+            config: Arc::new(RwLock::new(CodeScopeConfig::default_config())),
+            registry,
+            tool_router: Self::tool_router(),
+        })
     }
 
     /// Set the workspace root directory and load config
@@ -74,12 +96,12 @@ impl CodeScopeServer {
     /// Create a file pipeline with the given excludes
     async fn create_pipeline(&self, exclude_dirs: Option<Vec<String>>) -> Result<FilePipeline, McpError> {
         let workspace_root = self.get_workspace_root().await?;
-        let config = self.config.read().await;
+        let config = self.config.read().await.clone();
 
         Ok(FilePipeline::new(
             self.registry.clone(),
             workspace_root,
-            Arc::new(config.clone()),
+            config,
         )
         .with_excludes(exclude_dirs))
     }
@@ -189,7 +211,7 @@ impl CodeScopeServer {
         let before = context_before.unwrap_or(3);
         let after = context_after.unwrap_or(3);
 
-        let snippet: CodeSnippet = get_code_at_location(&path, line, before, after)
+        let snippet = get_code_at_location(&path, line, before, after)
             .map_err(|e| McpError::internal_error(format!("Failed to read code: {}", e), None))?;
 
         Self::serialize_result(&snippet)

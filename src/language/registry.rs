@@ -81,11 +81,10 @@ impl LanguageRegistry {
     }
 }
 
-impl Default for LanguageRegistry {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default language registry")
-    }
-}
+// Note: LanguageRegistry intentionally does not implement Default because
+// new() can fail if the embedded tree-sitter queries are malformed.
+// While this is unlikely at runtime (queries are compile-time embedded),
+// failing explicitly is preferable to silently returning an empty registry.
 
 #[cfg(test)]
 mod tests {

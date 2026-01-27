@@ -33,7 +33,11 @@ impl GenericParser {
         let language = self
             .registry
             .get_for_path(path)
-            .context(format!("Unsupported file type: {:?}", path))?;
+            .context(format!(
+                "Unsupported file type for path '{}'. Supported extensions: {}",
+                path.display(),
+                self.registry.supported_extensions().join(", ")
+            ))?;
 
         let lang_id = language.id();
 
@@ -143,8 +147,10 @@ mod tests {
         let registry = Arc::new(LanguageRegistry::new().unwrap());
         let mut parser = GenericParser::new(registry).unwrap();
 
-        let path = PathBuf::from("test.py");
-        let source = "x = 1";
+        // Use .xyz extension to ensure it's clearly unsupported
+        // (avoid .py which may be supported in the future)
+        let path = PathBuf::from("test.xyz");
+        let source = "some content";
 
         let tree = parser.parse(&path, source);
         assert!(tree.is_err());

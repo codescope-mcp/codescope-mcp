@@ -6,8 +6,8 @@ use streaming_iterator::StreamingIterator;
 
 use crate::context::extractor::extract_contexts;
 use crate::parser::GenericParser;
-use crate::symbol::comment::extract_docs_before_line;
-use crate::symbol::types::{CommentMatch, CommentType, SymbolDefinition, SymbolKind, SymbolUsage, UsageKind};
+use crate::symbol::comment::{extract_docs_before_line, find_comments_in_file};
+use crate::symbol::types::{CommentMatch, SymbolDefinition, SymbolKind, SymbolUsage, UsageKind};
 
 /// Trait for collecting results from parsed files
 pub trait ResultCollector: Sync {
@@ -243,35 +243,10 @@ impl ResultCollector for CommentCollector {
     type Item = CommentMatch;
 
     fn process_file(&self, _parser: &mut GenericParser, path: &Path) -> Result<Vec<Self::Item>> {
-        // Comments don't need parsing, just text search
-        let content = std::fs::read_to_string(path)?;
-        let mut matches = Vec::new();
-
-        for (line_num, line) in content.lines().enumerate() {
-            if let Some(col) = line.find(&self.text) {
-                // Determine comment type
-                let trimmed = line.trim();
-                let comment_type = if trimmed.starts_with("//") {
-                    Some(CommentType::SingleLine)
-                } else if trimmed.starts_with("/*") || trimmed.starts_with("*") {
-                    Some(CommentType::Block)
-                } else {
-                    None
-                };
-
-                if let Some(ct) = comment_type {
-                    matches.push(CommentMatch {
-                        file_path: path.to_string_lossy().to_string(),
-                        line: line_num + 1,
-                        column: col,
-                        comment_type: ct,
-                        content: trimmed.to_string(),
-                    });
-                }
-            }
-        }
-
-        Ok(matches)
+        // Delegate to the existing comprehensive comment search implementation
+        // which properly handles multi-line block comments, state management,
+        // and edge cases that a simple line-by-line search would miss.
+        find_comments_in_file(path, &self.text)
     }
 }
 
