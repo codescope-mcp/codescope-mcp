@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "codescope": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/codescope-mcp",
+      "command": "codescope-mcp",
       "env": {
         "RUST_LOG": "info"
       }
