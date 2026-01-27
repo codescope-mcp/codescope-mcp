@@ -47,7 +47,6 @@ def validate_email(email: str) -> bool:
     return "@" in email
 
 
-@staticmethod
 def format_name(first_name: str, last_name: str) -> str:
     """Format full name from first and last name."""
     return f"{first_name} {last_name}"
