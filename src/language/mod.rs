@@ -4,6 +4,7 @@ mod javascript;
 mod markdown;
 mod python;
 mod registry;
+mod rust;
 mod traits;
 mod typescript;
 
@@ -13,5 +14,6 @@ pub use javascript::{JavaScriptLanguage, JavaScriptReactLanguage};
 pub use markdown::MarkdownLanguage;
 pub use python::PythonLanguage;
 pub use registry::LanguageRegistry;
+pub use rust::RustLanguage;
 pub use traits::{LanguageId, LanguageSupport, SymbolKindMapping};
 pub use typescript::{TypeScriptLanguage, TypeScriptReactLanguage};

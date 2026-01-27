@@ -2013,3 +2013,179 @@ fn test_python_generic_parser_handles_py_files() {
     );
     assert_eq!(lang.name(), "Python", "Should use Python language support");
 }
+
+// ======================================
+// Rust tests
+// ======================================
+
+#[test]
+fn test_rust_find_struct_definition() {
+    let file_path = fixtures_path().join("sample.rs");
+    let definitions = find_definitions(&file_path, "User");
+
+    assert!(!definitions.is_empty(), "Should find User struct");
+    assert_eq!(definitions[0].0, "User");
+    assert_eq!(definitions[0].1, "struct");
+}
+
+#[test]
+fn test_rust_find_enum_definition() {
+    let file_path = fixtures_path().join("sample.rs");
+    let definitions = find_definitions(&file_path, "UserRole");
+
+    assert!(!definitions.is_empty(), "Should find UserRole enum");
+    assert_eq!(definitions[0].0, "UserRole");
+    assert_eq!(definitions[0].1, "enum");
+}
+
+#[test]
+fn test_rust_find_trait_definition() {
+    let file_path = fixtures_path().join("sample.rs");
+    let definitions = find_definitions(&file_path, "Validatable");
+
+    assert!(!definitions.is_empty(), "Should find Validatable trait");
+    assert_eq!(definitions[0].0, "Validatable");
+    assert_eq!(definitions[0].1, "trait");
+}
+
+#[test]
+fn test_rust_find_function_definition() {
+    let file_path = fixtures_path().join("sample.rs");
+    let definitions = find_definitions(&file_path, "process_user");
+
+    assert!(!definitions.is_empty(), "Should find process_user function");
+    assert_eq!(definitions[0].0, "process_user");
+    assert_eq!(definitions[0].1, "function");
+}
+
+#[test]
+fn test_rust_find_method_definition() {
+    let file_path = fixtures_path().join("sample.rs");
+    let definitions = find_definitions(&file_path, "display_name");
+
+    assert!(!definitions.is_empty(), "Should find display_name method");
+    assert_eq!(definitions[0].0, "display_name");
+    assert_eq!(definitions[0].1, "method");
+}
+
+#[test]
+fn test_rust_find_impl_method() {
+    let file_path = fixtures_path().join("sample.rs");
+    let definitions = find_definitions(&file_path, "is_admin");
+
+    assert!(!definitions.is_empty(), "Should find is_admin method");
+    assert_eq!(definitions[0].0, "is_admin");
+    assert_eq!(definitions[0].1, "method");
+}
+
+#[test]
+fn test_rust_find_module_definition() {
+    let file_path = fixtures_path().join("sample.rs");
+    let definitions = find_definitions(&file_path, "user_service");
+
+    assert!(!definitions.is_empty(), "Should find user_service module");
+    assert_eq!(definitions[0].0, "user_service");
+    assert_eq!(definitions[0].1, "module");
+}
+
+#[test]
+fn test_rust_find_type_alias() {
+    let file_path = fixtures_path().join("sample.rs");
+    let definitions = find_definitions(&file_path, "UserId");
+
+    assert!(!definitions.is_empty(), "Should find UserId type alias");
+    assert_eq!(definitions[0].0, "UserId");
+    assert_eq!(definitions[0].1, "type_alias");
+}
+
+#[test]
+fn test_rust_find_const_definition() {
+    let file_path = fixtures_path().join("sample.rs");
+    let definitions = find_definitions(&file_path, "MAX_USERS");
+
+    assert!(!definitions.is_empty(), "Should find MAX_USERS const");
+    assert_eq!(definitions[0].0, "MAX_USERS");
+    assert_eq!(definitions[0].1, "const");
+}
+
+#[test]
+fn test_rust_find_static_definition() {
+    let file_path = fixtures_path().join("sample.rs");
+    let definitions = find_definitions(&file_path, "USER_COUNTER");
+
+    assert!(!definitions.is_empty(), "Should find USER_COUNTER static");
+    assert_eq!(definitions[0].0, "USER_COUNTER");
+    assert_eq!(definitions[0].1, "static");
+}
+
+#[test]
+fn test_rust_find_macro_definition() {
+    let file_path = fixtures_path().join("sample.rs");
+    let definitions = find_definitions(&file_path, "create_user");
+
+    assert!(!definitions.is_empty(), "Should find create_user macro");
+    assert_eq!(definitions[0].0, "create_user");
+    assert_eq!(definitions[0].1, "macro");
+}
+
+/// Helper function to find Rust usages using GenericParser
+fn find_rust_usages(file_path: &std::path::Path, symbol_name: &str) -> Vec<String> {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+
+    let source_code = std::fs::read_to_string(file_path).expect("Failed to read file");
+    let (tree, lang) = parser
+        .parse_with_language(file_path, &source_code)
+        .expect("Failed to parse file");
+
+    let query = lang.usages_query();
+    let mut cursor = tree_sitter::QueryCursor::new();
+
+    use streaming_iterator::StreamingIterator;
+    let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
+
+    let mut results = Vec::new();
+    while let Some(m) = matches.next() {
+        for capture in m.captures {
+            let capture_name = &query.capture_names()[capture.index as usize];
+            if *capture_name == "usage" {
+                let usage_text = capture
+                    .node
+                    .utf8_text(source_code.as_bytes())
+                    .unwrap_or("")
+                    .to_string();
+                if usage_text == symbol_name {
+                    results.push(usage_text);
+                }
+            }
+        }
+    }
+
+    results
+}
+
+#[test]
+fn test_rust_find_usages() {
+    let file_path = fixtures_path().join("sample.rs");
+    let usages = find_rust_usages(&file_path, "User");
+
+    assert!(!usages.is_empty(), "Should find 'User' usages in Rust file");
+}
+
+#[test]
+fn test_rust_generic_parser_handles_rs_files() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.rs");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let result = parser.parse_with_language(&file_path, &source_code);
+
+    assert!(result.is_ok(), "GenericParser should handle .rs files");
+    let (tree, lang) = result.unwrap();
+    assert!(
+        tree.root_node().child_count() > 0,
+        "Should produce valid AST with children"
+    );
+    assert_eq!(lang.name(), "Rust", "Should use Rust language support");
+}
