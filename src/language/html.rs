@@ -6,6 +6,18 @@ use crate::symbol::types::SymbolKind;
 use super::traits::{LanguageId, LanguageSupport, SymbolKindMapping};
 
 /// HTML language support
+///
+/// This implementation supports:
+/// - HTML elements (both regular elements with start_tag and self-closing elements)
+/// - id attributes (captured as HtmlId)
+/// - class attributes (captured as HtmlClass)
+///
+/// Known limitations:
+/// - Class attributes with multiple space-separated values (e.g., `class="card user-card"`)
+///   are currently captured as a single class name rather than separate classes.
+///   This means "card user-card" would be captured as one definition instead of
+///   two separate classes "card" and "user-card".
+/// - Inline event handlers and other attributes are not captured as symbols.
 pub struct HtmlLanguage {
     language: Language,
     definitions_query: Query,

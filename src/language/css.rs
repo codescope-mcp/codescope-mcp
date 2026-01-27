@@ -6,6 +6,17 @@ use crate::symbol::types::SymbolKind;
 use super::traits::{LanguageId, LanguageSupport, SymbolKindMapping};
 
 /// CSS language support
+///
+/// This implementation supports:
+/// - Class selectors (.classname)
+/// - ID selectors (#idname)
+/// - CSS custom properties/variables (--property-name)
+/// - @keyframes animations
+///
+/// Known limitations:
+/// - Pseudo-classes and pseudo-elements are not captured as separate symbols.
+/// - Media queries and other at-rules (except @keyframes) are not captured.
+/// - Nested selectors in preprocessors (Sass/Less) are not supported.
 pub struct CssLanguage {
     language: Language,
     definitions_query: Query,
