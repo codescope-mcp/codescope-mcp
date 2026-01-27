@@ -12,7 +12,7 @@ use ignore::WalkBuilder;
 use rayon::prelude::*;
 
 use crate::config::CodeScopeConfig;
-use crate::language::LanguageRegistry;
+use crate::language::{LanguageId, LanguageRegistry};
 use crate::parser::GenericParser;
 
 /// File processing pipeline
@@ -24,6 +24,7 @@ pub struct FilePipeline {
     workspace_root: PathBuf,
     config: CodeScopeConfig,
     additional_excludes: Option<Vec<String>>,
+    language_filter: Option<LanguageId>,
 }
 
 impl FilePipeline {
@@ -37,11 +38,20 @@ impl FilePipeline {
             workspace_root,
             config,
             additional_excludes: None,
+            language_filter: None,
         }
     }
 
     pub fn with_excludes(mut self, excludes: Option<Vec<String>>) -> Self {
         self.additional_excludes = excludes;
+        self
+    }
+
+    /// Filter files by language
+    ///
+    /// If set, only files matching the specified language will be processed.
+    pub fn with_language_filter(mut self, language: Option<String>) -> Self {
+        self.language_filter = language.and_then(|lang| parse_language_id(&lang));
         self
     }
 
@@ -61,6 +71,14 @@ impl FilePipeline {
                     .config
                     .should_exclude(path, self.additional_excludes.as_deref())
                 {
+                    // Check language filter
+                    if let Some(filter_lang) = self.language_filter {
+                        if let Some(lang) = self.registry.get_for_path(path) {
+                            if lang.id() != filter_lang {
+                                continue;
+                            }
+                        }
+                    }
                     files.push(path.to_path_buf());
                 }
             }
@@ -111,5 +129,15 @@ impl FilePipeline {
             })
             .flatten()
             .collect()
+    }
+}
+
+/// Parse a language name string to LanguageId
+fn parse_language_id(name: &str) -> Option<LanguageId> {
+    match name.to_lowercase().as_str() {
+        "typescript" | "ts" => Some(LanguageId::TypeScript),
+        "typescriptreact" | "tsx" => Some(LanguageId::TypeScriptReact),
+        "markdown" | "md" => Some(LanguageId::Markdown),
+        _ => None,
     }
 }

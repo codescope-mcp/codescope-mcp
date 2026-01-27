@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "PascalCase")]
 pub enum SymbolKind {
+    // TypeScript/TSX
     Function,
     Class,
     Method,
@@ -14,6 +15,15 @@ pub enum SymbolKind {
     ArrowFunction,
     Constructor,
     TypeAlias,
+    // Markdown
+    Heading1,
+    Heading2,
+    Heading3,
+    Heading4,
+    Heading5,
+    Heading6,
+    CodeBlock,
+    Link,
 }
 
 impl std::fmt::Display for SymbolKind {
@@ -28,6 +38,14 @@ impl std::fmt::Display for SymbolKind {
             SymbolKind::ArrowFunction => write!(f, "ArrowFunction"),
             SymbolKind::Constructor => write!(f, "Constructor"),
             SymbolKind::TypeAlias => write!(f, "TypeAlias"),
+            SymbolKind::Heading1 => write!(f, "Heading1"),
+            SymbolKind::Heading2 => write!(f, "Heading2"),
+            SymbolKind::Heading3 => write!(f, "Heading3"),
+            SymbolKind::Heading4 => write!(f, "Heading4"),
+            SymbolKind::Heading5 => write!(f, "Heading5"),
+            SymbolKind::Heading6 => write!(f, "Heading6"),
+            SymbolKind::CodeBlock => write!(f, "CodeBlock"),
+            SymbolKind::Link => write!(f, "Link"),
         }
     }
 }

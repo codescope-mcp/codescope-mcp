@@ -6,14 +6,15 @@
 (class_declaration
   name: (type_identifier) @name) @definition.class
 
-; Method definitions
-(method_definition
-  name: (property_identifier) @name) @definition.method
-
-; Constructor
+; Constructor (must come before method to avoid capturing as method)
 (method_definition
   name: (property_identifier) @name
   (#eq? @name "constructor")) @definition.constructor
+
+; Method definitions (excluding constructor)
+(method_definition
+  name: (property_identifier) @name
+  (#not-eq? @name "constructor")) @definition.method
 
 ; Interface declarations
 (interface_declaration
@@ -23,17 +24,17 @@
 (enum_declaration
   name: (identifier) @name) @definition.enum
 
-; Variable declarations (const/let/var)
-(lexical_declaration
-  (variable_declarator
-    name: (identifier) @name
-    value: (_) @value)) @definition.variable
-
-; Arrow function assigned to variable
+; Arrow function assigned to variable (must come before variable to capture arrow functions correctly)
 (lexical_declaration
   (variable_declarator
     name: (identifier) @name
     value: (arrow_function))) @definition.arrow_function
+
+; Variable declarations (const/let/var) - excludes arrow functions via processing order
+(lexical_declaration
+  (variable_declarator
+    name: (identifier) @name
+    value: (_) @value)) @definition.variable
 
 ; Type alias
 (type_alias_declaration

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use codescope_mcp::parser::typescript::TypeScriptParser;
 use codescope_mcp::symbol::comment::{find_comments_in_file, get_code_at_location};
-use codescope_mcp::symbol::definition::find_definitions_in_file;
+use codescope_mcp::symbol::definition::{find_definitions_in_file, find_symbol_at_location};
 use codescope_mcp::symbol::types::{CommentType, UsageKind};
 use codescope_mcp::symbol::usage::find_usages_in_file;
 
@@ -776,5 +776,164 @@ fn test_qualified_name_distinguishes_same_method() {
             "Line {}: qualified_name={}",
             usage.line, usage.qualified_name
         );
+    }
+}
+
+// ======================================
+// get_symbol_at_location tests
+// ======================================
+
+#[test]
+fn test_find_symbol_at_location_method() {
+    let mut parser = TypeScriptParser::new().expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.ts");
+
+    // Line 17 is inside addUser method (lines 16-18)
+    let symbol = find_symbol_at_location(&mut parser, &file_path, 17)
+        .expect("Failed to find symbol");
+
+    assert!(symbol.is_some(), "Should find addUser method at line 17");
+    let symbol = symbol.unwrap();
+    assert_eq!(symbol.name, "addUser", "Symbol name should be 'addUser'");
+    assert_eq!(symbol.node_kind.to_string(), "Method", "Symbol should be a method");
+    assert_eq!(symbol.start_line, 16, "Method should start at line 16");
+    assert_eq!(symbol.end_line, 18, "Method should end at line 18");
+}
+
+#[test]
+fn test_find_symbol_at_location_constructor() {
+    let mut parser = TypeScriptParser::new().expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.ts");
+
+    // Line 12 is inside constructor (lines 12-14)
+    let symbol = find_symbol_at_location(&mut parser, &file_path, 12)
+        .expect("Failed to find symbol");
+
+    assert!(symbol.is_some(), "Should find constructor at line 12");
+    let symbol = symbol.unwrap();
+    println!("Found symbol: name={}, kind={}", symbol.name, symbol.node_kind);
+    assert_eq!(symbol.name, "constructor", "Symbol name should be 'constructor'");
+    assert_eq!(symbol.node_kind.to_string(), "Constructor", "Symbol should be a constructor");
+    assert_eq!(symbol.start_line, 12, "Constructor should start at line 12");
+    assert_eq!(symbol.end_line, 14, "Constructor should end at line 14");
+}
+
+#[test]
+fn test_find_symbol_at_location_function() {
+    let mut parser = TypeScriptParser::new().expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.ts");
+
+    // Line 38 is inside processUser function (lines 37-39)
+    let symbol = find_symbol_at_location(&mut parser, &file_path, 38)
+        .expect("Failed to find symbol");
+
+    assert!(symbol.is_some(), "Should find processUser function at line 38");
+    let symbol = symbol.unwrap();
+    assert_eq!(symbol.name, "processUser", "Symbol name should be 'processUser'");
+    assert_eq!(symbol.node_kind.to_string(), "Function", "Symbol should be a function");
+    assert_eq!(symbol.start_line, 37, "Function should start at line 37");
+    assert_eq!(symbol.end_line, 39, "Function should end at line 39");
+}
+
+#[test]
+fn test_find_symbol_at_location_arrow_function() {
+    let mut parser = TypeScriptParser::new().expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.ts");
+
+    // Line 30 is inside createUser arrow function (lines 29-35)
+    let symbol = find_symbol_at_location(&mut parser, &file_path, 30)
+        .expect("Failed to find symbol");
+
+    assert!(symbol.is_some(), "Should find createUser at line 30");
+    let symbol = symbol.unwrap();
+    assert_eq!(symbol.name, "createUser", "Symbol name should be 'createUser'");
+    assert_eq!(symbol.node_kind.to_string(), "ArrowFunction", "Symbol should be an arrow function");
+    assert_eq!(symbol.start_line, 29, "Arrow function should start at line 29");
+    assert_eq!(symbol.end_line, 35, "Arrow function should end at line 35");
+    println!("Arrow function kind: {}", symbol.node_kind);
+}
+
+#[test]
+fn test_find_symbol_at_location_class() {
+    let mut parser = TypeScriptParser::new().expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.ts");
+
+    // Line 10 is inside UserService class (lines 9-27) but outside methods
+    let symbol = find_symbol_at_location(&mut parser, &file_path, 10)
+        .expect("Failed to find symbol");
+
+    assert!(symbol.is_some(), "Should find symbol at line 10");
+    let symbol = symbol.unwrap();
+    println!(
+        "Found at line 10: name={}, kind={}, start={}, end={}",
+        symbol.name, symbol.node_kind, symbol.start_line, symbol.end_line
+    );
+    // Should be UserService class since line 10 is the property declaration
+    // which is not captured as a symbol
+    assert_eq!(symbol.name, "UserService", "Should find UserService class");
+}
+
+#[test]
+fn test_find_symbol_at_location_interface() {
+    let mut parser = TypeScriptParser::new().expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.ts");
+
+    // Line 4 is inside User interface (lines 3-7)
+    let symbol = find_symbol_at_location(&mut parser, &file_path, 4)
+        .expect("Failed to find symbol");
+
+    assert!(symbol.is_some(), "Should find User interface at line 4");
+    let symbol = symbol.unwrap();
+    assert_eq!(symbol.name, "User", "Symbol name should be 'User'");
+    assert_eq!(symbol.node_kind.to_string(), "Interface", "Symbol should be an interface");
+}
+
+#[test]
+fn test_find_symbol_at_location_smallest_enclosing() {
+    let mut parser = TypeScriptParser::new().expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.ts");
+
+    // Line 21 is inside findUser method which is inside UserService class
+    // Should return findUser (the smallest enclosing symbol)
+    let symbol = find_symbol_at_location(&mut parser, &file_path, 21)
+        .expect("Failed to find symbol");
+
+    assert!(symbol.is_some(), "Should find findUser method at line 21");
+    let symbol = symbol.unwrap();
+    assert_eq!(
+        symbol.name, "findUser",
+        "Should find the smallest enclosing symbol (findUser method)"
+    );
+    assert_eq!(symbol.node_kind.to_string(), "Method");
+}
+
+#[test]
+fn test_find_symbol_at_location_outside_symbols() {
+    let mut parser = TypeScriptParser::new().expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.ts");
+
+    // Line 1 is a comment outside any symbol
+    let symbol = find_symbol_at_location(&mut parser, &file_path, 1)
+        .expect("Failed to find symbol");
+
+    assert!(symbol.is_none(), "Should not find symbol at line 1 (comment)");
+}
+
+#[test]
+fn test_find_symbol_at_location_debug() {
+    let mut parser = TypeScriptParser::new().expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.ts");
+
+    println!("\n=== Debug: Symbol at each line ===");
+    for line in 1..=42 {
+        let symbol = find_symbol_at_location(&mut parser, &file_path, line)
+            .expect("Failed to find symbol");
+        match symbol {
+            Some(s) => println!(
+                "Line {}: {} ({}) [{}-{}]",
+                line, s.name, s.node_kind, s.start_line, s.end_line
+            ),
+            None => println!("Line {}: <none>", line),
+        }
     }
 }

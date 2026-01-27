@@ -17,11 +17,13 @@ use crate::pipeline::{
     CommentCollector, DefinitionCollector, FilePipeline, ImportCollector, MethodCallCollector,
     UsageCollector,
 };
+use crate::parser::GenericParser;
 use crate::server::types::{
     CodeAtLocationParams, CommentSearchParams, DefinitionParams, ImportsParams, MethodCallsParams,
-    UsagesParams,
+    SymbolAtLocationParams, SymbolAtLocationResponse, UsagesParams,
 };
 use crate::symbol::comment::get_code_at_location;
+use crate::symbol::types::SymbolDefinition;
 
 /// CodeScope MCP Server
 #[derive(Clone)]
@@ -114,7 +116,7 @@ impl CodeScopeServer {
     }
 
     #[tool(
-        description = "Find symbol definitions in the TypeScript/TSX codebase. Returns file path, line numbers, and source code for each definition found. Set include_docs=true to get JSDoc/comments."
+        description = "Find symbol definitions in the codebase. Returns file path, line numbers, and source code for each definition found. Set include_docs=true to get JSDoc/comments. Supports TypeScript, TSX, and Markdown."
     )]
     async fn symbol_definition(
         &self,
@@ -122,9 +124,13 @@ impl CodeScopeServer {
             symbol,
             include_docs,
             exclude_dirs,
+            language,
         }): Parameters<DefinitionParams>,
     ) -> Result<CallToolResult, McpError> {
-        let pipeline = self.create_pipeline(exclude_dirs).await?;
+        let pipeline = self
+            .create_pipeline(exclude_dirs)
+            .await?
+            .with_language_filter(language);
         let collector = DefinitionCollector {
             symbol,
             include_docs: include_docs.unwrap_or(false),
@@ -135,7 +141,7 @@ impl CodeScopeServer {
     }
 
     #[tool(
-        description = "Find all usages of a symbol in the TypeScript/TSX codebase. Returns file path, line, column, and usage_kind. Set include_contexts=true for context info."
+        description = "Find all usages of a symbol in the codebase. Returns file path, line, column, and usage_kind. Set include_contexts=true for context info. Supports TypeScript, TSX, and Markdown."
     )]
     async fn symbol_usages(
         &self,
@@ -143,9 +149,13 @@ impl CodeScopeServer {
             symbol,
             include_contexts,
             exclude_dirs,
+            language,
         }): Parameters<UsagesParams>,
     ) -> Result<CallToolResult, McpError> {
-        let pipeline = self.create_pipeline(exclude_dirs).await?;
+        let pipeline = self
+            .create_pipeline(exclude_dirs)
+            .await?
+            .with_language_filter(language);
         let collector = UsageCollector {
             symbol,
             include_imports: true,
@@ -162,7 +172,7 @@ impl CodeScopeServer {
     }
 
     #[tool(
-        description = "Find method/function calls. Use for patterns like Date.now() or array.map(). Specify object_name to filter by object (e.g., object_name='Date' for Date.now() only)."
+        description = "Find method/function calls. Use for patterns like Date.now() or array.map(). Specify object_name to filter by object (e.g., object_name='Date' for Date.now() only). Supports TypeScript and TSX."
     )]
     async fn find_method_calls(
         &self,
@@ -170,9 +180,13 @@ impl CodeScopeServer {
             method_name,
             object_name,
             exclude_dirs,
+            language,
         }): Parameters<MethodCallsParams>,
     ) -> Result<CallToolResult, McpError> {
-        let pipeline = self.create_pipeline(exclude_dirs).await?;
+        let pipeline = self
+            .create_pipeline(exclude_dirs)
+            .await?
+            .with_language_filter(language);
         let collector = MethodCallCollector {
             method_name,
             object_name,
@@ -183,16 +197,20 @@ impl CodeScopeServer {
     }
 
     #[tool(
-        description = "Find import statements for a symbol. Use to understand module dependencies and where a symbol is imported from."
+        description = "Find import statements for a symbol. Use to understand module dependencies and where a symbol is imported from. Supports TypeScript and TSX."
     )]
     async fn find_imports(
         &self,
         Parameters(ImportsParams {
             symbol,
             exclude_dirs,
+            language,
         }): Parameters<ImportsParams>,
     ) -> Result<CallToolResult, McpError> {
-        let pipeline = self.create_pipeline(exclude_dirs).await?;
+        let pipeline = self
+            .create_pipeline(exclude_dirs)
+            .await?
+            .with_language_filter(language);
         let collector = ImportCollector { symbol };
 
         let results = pipeline.process(&collector);
@@ -200,13 +218,20 @@ impl CodeScopeServer {
     }
 
     #[tool(
-        description = "Search for text within comments in TypeScript/TSX files. Use to find TODOs, FIXMEs, or any text in comments."
+        description = "Search for text within comments (TypeScript/TSX) or full text (Markdown). Use to find TODOs, FIXMEs, or any text in comments."
     )]
     async fn find_in_comments(
         &self,
-        Parameters(CommentSearchParams { text, exclude_dirs }): Parameters<CommentSearchParams>,
+        Parameters(CommentSearchParams {
+            text,
+            exclude_dirs,
+            language,
+        }): Parameters<CommentSearchParams>,
     ) -> Result<CallToolResult, McpError> {
-        let pipeline = self.create_pipeline(exclude_dirs).await?;
+        let pipeline = self
+            .create_pipeline(exclude_dirs)
+            .await?
+            .with_language_filter(language);
         let collector = CommentCollector { text };
 
         let results = pipeline.process(&collector);
@@ -234,6 +259,106 @@ impl CodeScopeServer {
 
         Self::serialize_result(&snippet)
     }
+
+    #[tool(
+        description = "Get the enclosing symbol at a specific file location. Returns the full symbol (function, class, heading, etc.) that contains the given line. Use after symbol_usages to get the full context of where a symbol is used."
+    )]
+    async fn get_symbol_at_location(
+        &self,
+        Parameters(SymbolAtLocationParams { file_path, line }): Parameters<SymbolAtLocationParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let path = PathBuf::from(&file_path);
+
+        // Check if file is supported
+        if self.registry.get_for_path(&path).is_none() {
+            return Err(McpError::invalid_params(
+                format!("Unsupported file type: {}", file_path),
+                None,
+            ));
+        }
+
+        // Read file and parse
+        let source_code = std::fs::read_to_string(&path).map_err(|e| {
+            McpError::internal_error(format!("Failed to read file: {}", e), None)
+        })?;
+
+        let mut parser = GenericParser::new(self.registry.clone()).map_err(|e| {
+            McpError::internal_error(format!("Failed to create parser: {}", e), None)
+        })?;
+
+        let (tree, lang) = parser.parse_with_language(&path, &source_code).map_err(|e| {
+            McpError::internal_error(format!("Failed to parse file: {}", e), None)
+        })?;
+
+        // Find the symbol containing the given line
+        let target_line = line.saturating_sub(1); // Convert to 0-indexed
+        let query = lang.definitions_query();
+        let mappings = lang.definition_mappings();
+
+        let mut cursor = tree_sitter::QueryCursor::new();
+        use streaming_iterator::StreamingIterator;
+        let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
+
+        let mut best_symbol: Option<SymbolDefinition> = None;
+        let mut best_size: usize = usize::MAX;
+
+        while let Some(m) = matches.next() {
+            let mut name: Option<&str> = None;
+            let mut definition_node: Option<tree_sitter::Node> = None;
+            let mut kind = None;
+
+            for capture in m.captures {
+                let capture_name = &query.capture_names()[capture.index as usize];
+
+                if *capture_name == "name" {
+                    name = Some(capture.node.utf8_text(source_code.as_bytes()).unwrap_or(""));
+                } else {
+                    // Check mappings for definition types
+                    for mapping in mappings {
+                        if *capture_name == mapping.capture_name {
+                            definition_node = Some(capture.node);
+                            kind = Some(mapping.kind);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if let (Some(name_str), Some(node), Some(symbol_kind)) = (name, definition_node, kind) {
+                let start_line = node.start_position().row;
+                let end_line = node.end_position().row;
+
+                // Check if the target line is within this symbol
+                if target_line >= start_line && target_line <= end_line {
+                    let size = end_line - start_line;
+                    // Prefer the smallest enclosing symbol
+                    if size < best_size {
+                        best_size = size;
+                        let code = node
+                            .utf8_text(source_code.as_bytes())
+                            .unwrap_or("")
+                            .to_string();
+
+                        best_symbol = Some(SymbolDefinition {
+                            file_path: file_path.clone(),
+                            start_line: start_line + 1,
+                            end_line: end_line + 1,
+                            node_kind: symbol_kind,
+                            code,
+                            name: name_str.to_string(),
+                            docs: None,
+                        });
+                    }
+                }
+            }
+        }
+
+        let response = SymbolAtLocationResponse {
+            symbol: best_symbol,
+        };
+
+        Self::serialize_result(&response)
+    }
 }
 
 #[tool_handler]
@@ -244,17 +369,19 @@ impl ServerHandler for CodeScopeServer {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "CodeScope provides TypeScript/TSX symbol search tools.\n\n\
+                "CodeScope provides TypeScript/TSX/Markdown symbol search tools.\n\n\
                 TOOLS:\n\
                 - symbol_definition: Find where symbols are defined. Use include_docs=true for JSDoc.\n\
                 - symbol_usages: Find all usages of a symbol\n\
                 - find_method_calls: Find method calls (e.g., Date.now()). Use object_name to filter.\n\
                 - find_imports: Find import statements for a symbol\n\
                 - find_in_comments: Search text in comments (TODO, FIXME, etc.)\n\
-                - get_code_at_location: Get code at a specific file:line\n\n\
+                - get_code_at_location: Get code at a specific file:line\n\
+                - get_symbol_at_location: Get the enclosing symbol at a file:line\n\n\
                 WORKFLOW:\n\
                 1. Search with find_in_comments/symbol_usages\n\
-                2. Get code context with get_code_at_location(file_path, line)"
+                2. Get code context with get_code_at_location(file_path, line)\n\
+                3. Get full symbol with get_symbol_at_location(file_path, line)"
                     .to_string(),
             ),
         }
