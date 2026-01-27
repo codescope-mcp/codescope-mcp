@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ignore::WalkBuilder;
 use rmcp::{
     handler::server::{tool::ToolRouter, wrapper::Parameters},
     model::{
@@ -13,34 +12,66 @@ use rmcp::{
 use tokio::sync::RwLock;
 
 use crate::config::CodeScopeConfig;
-use crate::parser::typescript::TypeScriptParser;
-use crate::server::types::{CodeAtLocationParams, CommentSearchParams, DefinitionParams, ImportsParams, MethodCallsParams, UsagesParams};
-use crate::symbol::comment::{find_comments_in_file, get_code_at_location};
-use crate::symbol::definition::find_definitions_in_file;
-use crate::symbol::types::{CommentMatch, SymbolDefinition, SymbolUsage, UsageKind};
-use crate::symbol::usage::find_usages_in_file;
+use crate::language::LanguageRegistry;
+use crate::pipeline::{
+    CommentCollector, DefinitionCollector, FilePipeline, ImportCollector, MethodCallCollector,
+    UsageCollector,
+};
+use crate::server::types::{
+    CodeAtLocationParams, CommentSearchParams, DefinitionParams, ImportsParams, MethodCallsParams,
+    UsagesParams,
+};
+use crate::symbol::comment::get_code_at_location;
 
 /// CodeScope MCP Server
 #[derive(Clone)]
 pub struct CodeScopeServer {
     workspace_root: Arc<RwLock<Option<PathBuf>>>,
     config: Arc<RwLock<CodeScopeConfig>>,
+    registry: Arc<LanguageRegistry>,
     tool_router: ToolRouter<Self>,
 }
 
 #[tool_router]
 impl CodeScopeServer {
+    /// Create a new CodeScope server
+    ///
+    /// # Panics
+    ///
+    /// Panics if the language registry cannot be created. This can only happen
+    /// if the embedded tree-sitter queries are malformed, which would indicate
+    /// a programming error caught during development/testing rather than a
+    /// runtime failure.
     pub fn new() -> Self {
+        let registry = Arc::new(
+            LanguageRegistry::new().expect(
+                "Failed to create language registry: embedded queries are malformed. \
+                This is a programming error that should be caught during development."
+            ),
+        );
+
         Self {
             workspace_root: Arc::new(RwLock::new(None)),
             config: Arc::new(RwLock::new(CodeScopeConfig::default_config())),
+            registry,
             tool_router: Self::tool_router(),
         }
     }
 
+    /// Try to create a new CodeScope server, returning an error if initialization fails
+    pub fn try_new() -> Result<Self, anyhow::Error> {
+        let registry = Arc::new(LanguageRegistry::new()?);
+
+        Ok(Self {
+            workspace_root: Arc::new(RwLock::new(None)),
+            config: Arc::new(RwLock::new(CodeScopeConfig::default_config())),
+            registry,
+            tool_router: Self::tool_router(),
+        })
+    }
+
     /// Set the workspace root directory and load config
     pub async fn set_workspace_root(&self, root: PathBuf) {
-        // Load config from workspace root
         let loaded_config = CodeScopeConfig::load(&root);
         {
             let mut config = self.config.write().await;
@@ -51,79 +82,55 @@ impl CodeScopeServer {
         *workspace = Some(root);
     }
 
-    /// Get all TypeScript/TSX files in the workspace
-    async fn get_typescript_files(&self) -> Result<Vec<PathBuf>, McpError> {
+    /// Get the workspace root directory
+    async fn get_workspace_root(&self) -> Result<PathBuf, McpError> {
         let workspace = self.workspace_root.read().await;
-        let root = match workspace.as_ref() {
-            Some(path) => path.clone(),
-            None => {
-                // Fall back to current directory if no workspace root is set
-                std::env::current_dir().map_err(|e| {
-                    McpError::internal_error(
-                        format!("Failed to get current directory: {}", e),
-                        None,
-                    )
-                })?
-            }
-        };
-
-        let mut files = Vec::new();
-        let walker = WalkBuilder::new(root).hidden(true).git_ignore(true).build();
-
-        for entry in walker.flatten() {
-            let path = entry.path();
-            if path.is_file() && TypeScriptParser::is_typescript_file(path) {
-                files.push(path.to_path_buf());
-            }
+        match workspace.as_ref() {
+            Some(path) => Ok(path.clone()),
+            None => std::env::current_dir().map_err(|e| {
+                McpError::internal_error(format!("Failed to get current directory: {}", e), None)
+            }),
         }
-
-        Ok(files)
     }
 
-    /// Helper function to filter files by config and additional exclude_dirs
-    fn should_exclude_path(
-        path: &PathBuf,
-        config: &CodeScopeConfig,
-        additional_excludes: &Option<Vec<String>>,
-    ) -> bool {
-        config.should_exclude(path, additional_excludes.as_ref().map(|v| v.as_slice()))
+    /// Create a file pipeline with the given excludes
+    async fn create_pipeline(&self, exclude_dirs: Option<Vec<String>>) -> Result<FilePipeline, McpError> {
+        let workspace_root = self.get_workspace_root().await?;
+        let config = self.config.read().await.clone();
+
+        Ok(FilePipeline::new(
+            self.registry.clone(),
+            workspace_root,
+            config,
+        )
+        .with_excludes(exclude_dirs))
+    }
+
+    /// Helper to serialize results to JSON
+    fn serialize_result<T: serde::Serialize>(result: &T) -> Result<CallToolResult, McpError> {
+        let json = serde_json::to_string_pretty(result).map_err(|e| {
+            McpError::internal_error(format!("Failed to serialize result: {}", e), None)
+        })?;
+        Ok(CallToolResult::success(vec![Content::text(json)]))
     }
 
     #[tool(description = "Find symbol definitions in the TypeScript/TSX codebase. Returns file path, line numbers, and source code for each definition found. Set include_docs=true to get JSDoc/comments.")]
     async fn symbol_definition(
         &self,
-        Parameters(DefinitionParams { symbol, include_docs, exclude_dirs }): Parameters<DefinitionParams>,
+        Parameters(DefinitionParams {
+            symbol,
+            include_docs,
+            exclude_dirs,
+        }): Parameters<DefinitionParams>,
     ) -> Result<CallToolResult, McpError> {
-        let files = self.get_typescript_files().await?;
-        let include_docs = include_docs.unwrap_or(false);
-        let config = self.config.read().await;
+        let pipeline = self.create_pipeline(exclude_dirs).await?;
+        let collector = DefinitionCollector {
+            symbol,
+            include_docs: include_docs.unwrap_or(false),
+        };
 
-        let mut parser = TypeScriptParser::new().map_err(|e| {
-            McpError::internal_error(format!("Failed to create parser: {}", e), None)
-        })?;
-
-        let mut all_definitions: Vec<SymbolDefinition> = Vec::new();
-
-        for file_path in files {
-            if Self::should_exclude_path(&file_path, &config, &exclude_dirs) {
-                continue;
-            }
-
-            match find_definitions_in_file(&mut parser, &file_path, &symbol, include_docs) {
-                Ok(definitions) => {
-                    all_definitions.extend(definitions);
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to parse {:?}: {}", file_path, e);
-                }
-            }
-        }
-
-        let result = serde_json::to_string_pretty(&all_definitions).map_err(|e| {
-            McpError::internal_error(format!("Failed to serialize result: {}", e), None)
-        })?;
-
-        Ok(CallToolResult::success(vec![Content::text(result)]))
+        let results = pipeline.process(&collector);
+        Self::serialize_result(&results)
     }
 
     #[tool(description = "Find all usages of a symbol in the TypeScript/TSX codebase. Returns file path, line, column, and usage_kind. Set include_contexts=true for context info.")]
@@ -135,40 +142,16 @@ impl CodeScopeServer {
             exclude_dirs,
         }): Parameters<UsagesParams>,
     ) -> Result<CallToolResult, McpError> {
-        let files = self.get_typescript_files().await?;
-        let config = self.config.read().await;
+        let pipeline = self.create_pipeline(exclude_dirs).await?;
+        let collector = UsageCollector {
+            symbol,
+            include_imports: true,
+            max_contexts: if include_contexts.unwrap_or(false) { 2 } else { 0 },
+            object_filter: None,
+        };
 
-        let mut parser = TypeScriptParser::new().map_err(|e| {
-            McpError::internal_error(format!("Failed to create parser: {}", e), None)
-        })?;
-
-        let mut all_usages: Vec<SymbolUsage> = Vec::new();
-
-        // include_contexts=true の場合は2、false の場合は0（contexts が空になり skip_serializing_if で省略）
-        let max_ctx = if include_contexts.unwrap_or(false) { 2 } else { 0 };
-        // import は常に含める（消費者側でフィルタ）
-        let incl_imports = true;
-
-        for file_path in files {
-            if Self::should_exclude_path(&file_path, &config, &exclude_dirs) {
-                continue;
-            }
-
-            match find_usages_in_file(&mut parser, &file_path, &symbol, incl_imports, max_ctx, None) {
-                Ok(usages) => {
-                    all_usages.extend(usages);
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to parse {:?}: {}", file_path, e);
-                }
-            }
-        }
-
-        let result = serde_json::to_string_pretty(&all_usages).map_err(|e| {
-            McpError::internal_error(format!("Failed to serialize result: {}", e), None)
-        })?;
-
-        Ok(CallToolResult::success(vec![Content::text(result)]))
+        let results = pipeline.process(&collector);
+        Self::serialize_result(&results)
     }
 
     #[tool(description = "Find method/function calls. Use for patterns like Date.now() or array.map(). Specify object_name to filter by object (e.g., object_name='Date' for Date.now() only).")]
@@ -180,41 +163,14 @@ impl CodeScopeServer {
             exclude_dirs,
         }): Parameters<MethodCallsParams>,
     ) -> Result<CallToolResult, McpError> {
-        let files = self.get_typescript_files().await?;
-        let config = self.config.read().await;
+        let pipeline = self.create_pipeline(exclude_dirs).await?;
+        let collector = MethodCallCollector {
+            method_name,
+            object_name,
+        };
 
-        let mut parser = TypeScriptParser::new().map_err(|e| {
-            McpError::internal_error(format!("Failed to create parser: {}", e), None)
-        })?;
-
-        let mut all_usages: Vec<SymbolUsage> = Vec::new();
-
-        for file_path in files {
-            if Self::should_exclude_path(&file_path, &config, &exclude_dirs) {
-                continue;
-            }
-
-            // contexts なし、import なし、object_filter あり
-            match find_usages_in_file(&mut parser, &file_path, &method_name, false, 0, object_name.as_deref()) {
-                Ok(usages) => {
-                    // MethodCall のみをフィルタ
-                    let method_calls: Vec<_> = usages
-                        .into_iter()
-                        .filter(|u| u.usage_kind == UsageKind::MethodCall)
-                        .collect();
-                    all_usages.extend(method_calls);
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to parse {:?}: {}", file_path, e);
-                }
-            }
-        }
-
-        let result = serde_json::to_string_pretty(&all_usages).map_err(|e| {
-            McpError::internal_error(format!("Failed to serialize result: {}", e), None)
-        })?;
-
-        Ok(CallToolResult::success(vec![Content::text(result)]))
+        let results = pipeline.process(&collector);
+        Self::serialize_result(&results)
     }
 
     #[tool(description = "Find import statements for a symbol. Use to understand module dependencies and where a symbol is imported from.")]
@@ -222,41 +178,11 @@ impl CodeScopeServer {
         &self,
         Parameters(ImportsParams { symbol, exclude_dirs }): Parameters<ImportsParams>,
     ) -> Result<CallToolResult, McpError> {
-        let files = self.get_typescript_files().await?;
-        let config = self.config.read().await;
+        let pipeline = self.create_pipeline(exclude_dirs).await?;
+        let collector = ImportCollector { symbol };
 
-        let mut parser = TypeScriptParser::new().map_err(|e| {
-            McpError::internal_error(format!("Failed to create parser: {}", e), None)
-        })?;
-
-        let mut all_usages: Vec<SymbolUsage> = Vec::new();
-
-        for file_path in files {
-            if Self::should_exclude_path(&file_path, &config, &exclude_dirs) {
-                continue;
-            }
-
-            // contexts なし、import を含める
-            match find_usages_in_file(&mut parser, &file_path, &symbol, true, 0, None) {
-                Ok(usages) => {
-                    // Import のみをフィルタ
-                    let imports: Vec<_> = usages
-                        .into_iter()
-                        .filter(|u| u.usage_kind == UsageKind::Import)
-                        .collect();
-                    all_usages.extend(imports);
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to parse {:?}: {}", file_path, e);
-                }
-            }
-        }
-
-        let result = serde_json::to_string_pretty(&all_usages).map_err(|e| {
-            McpError::internal_error(format!("Failed to serialize result: {}", e), None)
-        })?;
-
-        Ok(CallToolResult::success(vec![Content::text(result)]))
+        let results = pipeline.process(&collector);
+        Self::serialize_result(&results)
     }
 
     #[tool(description = "Search for text within comments in TypeScript/TSX files. Use to find TODOs, FIXMEs, or any text in comments.")]
@@ -264,37 +190,22 @@ impl CodeScopeServer {
         &self,
         Parameters(CommentSearchParams { text, exclude_dirs }): Parameters<CommentSearchParams>,
     ) -> Result<CallToolResult, McpError> {
-        let files = self.get_typescript_files().await?;
-        let config = self.config.read().await;
+        let pipeline = self.create_pipeline(exclude_dirs).await?;
+        let collector = CommentCollector { text };
 
-        let mut all_matches: Vec<CommentMatch> = Vec::new();
-
-        for file_path in files {
-            if Self::should_exclude_path(&file_path, &config, &exclude_dirs) {
-                continue;
-            }
-
-            match find_comments_in_file(&file_path, &text) {
-                Ok(matches) => {
-                    all_matches.extend(matches);
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to search comments in {:?}: {}", file_path, e);
-                }
-            }
-        }
-
-        let result = serde_json::to_string_pretty(&all_matches).map_err(|e| {
-            McpError::internal_error(format!("Failed to serialize result: {}", e), None)
-        })?;
-
-        Ok(CallToolResult::success(vec![Content::text(result)]))
+        let results = pipeline.process(&collector);
+        Self::serialize_result(&results)
     }
 
     #[tool(description = "Get code at a specific file location. Use after find_in_comments or symbol_usages to see the actual code around a specific line.")]
     async fn get_code_at_location(
         &self,
-        Parameters(CodeAtLocationParams { file_path, line, context_before, context_after }): Parameters<CodeAtLocationParams>,
+        Parameters(CodeAtLocationParams {
+            file_path,
+            line,
+            context_before,
+            context_after,
+        }): Parameters<CodeAtLocationParams>,
     ) -> Result<CallToolResult, McpError> {
         let path = PathBuf::from(&file_path);
         let before = context_before.unwrap_or(3);
@@ -303,10 +214,7 @@ impl CodeScopeServer {
         let snippet = get_code_at_location(&path, line, before, after)
             .map_err(|e| McpError::internal_error(format!("Failed to read code: {}", e), None))?;
 
-        let result = serde_json::to_string_pretty(&snippet)
-            .map_err(|e| McpError::internal_error(format!("Failed to serialize: {}", e), None))?;
-
-        Ok(CallToolResult::success(vec![Content::text(result)]))
+        Self::serialize_result(&snippet)
     }
 }
 

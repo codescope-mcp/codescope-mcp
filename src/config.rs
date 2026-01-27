@@ -1,15 +1,21 @@
 use serde::Deserialize;
 use std::path::Path;
 
+use glob::Pattern;
+
 /// Default directories to exclude from search
 const DEFAULT_EXCLUDE_DIRS: &[&str] = &["dist", "build", ".next", "out", "coverage"];
 
 /// CodeScope configuration
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize)]
 pub struct CodeScopeConfig {
     /// Directories to exclude from search
     #[serde(default)]
     pub exclude_dirs: Vec<String>,
+
+    /// Glob patterns to exclude from search (e.g., "**/*.test.ts", "**/__mocks__/**")
+    #[serde(default)]
+    pub exclude_patterns: Vec<String>,
 }
 
 impl CodeScopeConfig {
@@ -27,7 +33,6 @@ impl CodeScopeConfig {
                 }
             }
         }
-        // Return default configuration
         Self::default_config()
     }
 
@@ -35,6 +40,7 @@ impl CodeScopeConfig {
     pub fn default_config() -> Self {
         Self {
             exclude_dirs: DEFAULT_EXCLUDE_DIRS.iter().map(|s| s.to_string()).collect(),
+            exclude_patterns: Vec::new(),
         }
     }
 
@@ -42,7 +48,7 @@ impl CodeScopeConfig {
     pub fn should_exclude(&self, path: &Path, additional_excludes: Option<&[String]>) -> bool {
         let path_str = path.to_string_lossy();
 
-        // Check config excludes
+        // Check config exclude_dirs
         for dir in &self.exclude_dirs {
             if path_str.contains(&format!("/{}/", dir))
                 || path_str.contains(&format!("\\{}\\", dir))
@@ -58,6 +64,24 @@ impl CodeScopeConfig {
                     || path_str.contains(&format!("\\{}\\", dir))
                 {
                     return true;
+                }
+            }
+        }
+
+        // Check glob patterns
+        for pattern_str in &self.exclude_patterns {
+            match Pattern::new(pattern_str) {
+                Ok(pattern) => {
+                    if pattern.matches(&path_str) {
+                        return true;
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Invalid glob pattern '{}': {}. Pattern will be ignored.",
+                        pattern_str,
+                        e
+                    );
                 }
             }
         }
@@ -93,5 +117,25 @@ mod tests {
         // Should exclude with additional excludes
         let path = PathBuf::from("/project/test/sample.ts");
         assert!(config.should_exclude(&path, Some(&["test".to_string()])));
+    }
+
+    #[test]
+    fn test_exclude_patterns() {
+        let config = CodeScopeConfig {
+            exclude_patterns: vec!["**/*.test.ts".to_string(), "**/__mocks__/**".to_string()],
+            ..Default::default()
+        };
+
+        // Should exclude test files
+        let test_path = PathBuf::from("/project/src/utils.test.ts");
+        assert!(config.should_exclude(&test_path, None));
+
+        // Should exclude mock directories
+        let mock_path = PathBuf::from("/project/src/__mocks__/api.ts");
+        assert!(config.should_exclude(&mock_path, None));
+
+        // Should not exclude regular files
+        let regular_path = PathBuf::from("/project/src/utils.ts");
+        assert!(!config.should_exclude(&regular_path, None));
     }
 }
