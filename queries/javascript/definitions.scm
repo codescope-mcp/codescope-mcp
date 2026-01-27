@@ -44,6 +44,20 @@
   declaration: (class_declaration
     name: (identifier) @name)) @definition.class
 
+; Export arrow function (lexical: const/let) - must come before export variable
+(export_statement
+  declaration: (lexical_declaration
+    (variable_declarator
+      name: (identifier) @name
+      value: (arrow_function)))) @definition.arrow_function
+
+; Export arrow function (var) - must come before export variable
+(export_statement
+  declaration: (variable_declaration
+    (variable_declarator
+      name: (identifier) @name
+      value: (arrow_function)))) @definition.arrow_function
+
 ; Export variable declaration (lexical)
 (export_statement
   declaration: (lexical_declaration
