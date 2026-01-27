@@ -7,6 +7,8 @@ use crate::symbol::types::SymbolKind;
 pub enum LanguageId {
     TypeScript,
     TypeScriptReact,
+    JavaScript,
+    JavaScriptReact,
     Markdown,
     // Future: Python, Rust, Go, etc.
 }
@@ -16,6 +18,8 @@ impl std::fmt::Display for LanguageId {
         match self {
             LanguageId::TypeScript => write!(f, "TypeScript"),
             LanguageId::TypeScriptReact => write!(f, "TypeScriptReact"),
+            LanguageId::JavaScript => write!(f, "JavaScript"),
+            LanguageId::JavaScriptReact => write!(f, "JavaScriptReact"),
             LanguageId::Markdown => write!(f, "Markdown"),
         }
     }
