@@ -1,0 +1,25 @@
+{
+  "name": "codescope",
+  "owner": {
+    "name": "t0k0sh1"
+  },
+  "metadata": {
+    "description": "TypeScript/TSX symbol analysis and code navigation tools",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "codescope",
+      "source": ".",
+      "description": "TypeScript/TSX symbol analysis and code navigation MCP server",
+      "version": "0.1.0",
+      "author": {
+        "name": "t0k0sh1"
+      },
+      "repository": "https://github.com/codescope-mcp/codescope-mcp",
+      "license": "MIT",
+      "keywords": ["typescript", "tsx", "symbol-analysis", "code-navigation", "mcp"],
+      "category": "code-intelligence"
+    }
+  ]
+}
