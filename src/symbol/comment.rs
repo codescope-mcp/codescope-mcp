@@ -151,7 +151,10 @@ pub fn find_comments_in_file(file_path: &Path, search_text: &str) -> Result<Vec<
 ///
 /// Since Markdown doesn't have a concept of "comments", this function
 /// performs a full text search and treats all matches as block comments.
-pub fn find_text_in_markdown_file(file_path: &Path, search_text: &str) -> Result<Vec<CommentMatch>> {
+pub fn find_text_in_markdown_file(
+    file_path: &Path,
+    search_text: &str,
+) -> Result<Vec<CommentMatch>> {
     let source = std::fs::read_to_string(file_path)?;
     let file_path_str = file_path.to_string_lossy().to_string();
 
@@ -331,7 +334,7 @@ function foo() {}"#;
     fn test_find_text_in_markdown() {
         let mut file = NamedTempFile::with_suffix(".md").unwrap();
         writeln!(file, "# Test Heading").unwrap();
-        writeln!(file, "").unwrap();
+        writeln!(file).unwrap();
         writeln!(file, "This is a test document.").unwrap();
         writeln!(file, "TODO: add more content").unwrap();
         writeln!(file, "Another TODO item here").unwrap();

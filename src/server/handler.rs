@@ -13,11 +13,11 @@ use tokio::sync::RwLock;
 
 use crate::config::CodeScopeConfig;
 use crate::language::LanguageRegistry;
+use crate::parser::GenericParser;
 use crate::pipeline::{
     CommentCollector, DefinitionCollector, FilePipeline, ImportCollector, MethodCallCollector,
     UsageCollector,
 };
-use crate::parser::GenericParser;
 use crate::server::types::{
     CodeAtLocationParams, CommentSearchParams, DefinitionParams, ImportsParams, MethodCallsParams,
     SymbolAtLocationParams, SymbolAtLocationResponse, UsagesParams,
@@ -278,17 +278,16 @@ impl CodeScopeServer {
         }
 
         // Read file and parse
-        let source_code = std::fs::read_to_string(&path).map_err(|e| {
-            McpError::internal_error(format!("Failed to read file: {}", e), None)
-        })?;
+        let source_code = std::fs::read_to_string(&path)
+            .map_err(|e| McpError::internal_error(format!("Failed to read file: {}", e), None))?;
 
         let mut parser = GenericParser::new(self.registry.clone()).map_err(|e| {
             McpError::internal_error(format!("Failed to create parser: {}", e), None)
         })?;
 
-        let (tree, lang) = parser.parse_with_language(&path, &source_code).map_err(|e| {
-            McpError::internal_error(format!("Failed to parse file: {}", e), None)
-        })?;
+        let (tree, lang) = parser
+            .parse_with_language(&path, &source_code)
+            .map_err(|e| McpError::internal_error(format!("Failed to parse file: {}", e), None))?;
 
         // Find the symbol containing the given line
         let target_line = line.saturating_sub(1); // Convert to 0-indexed
