@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use super::css::CssLanguage;
 use super::go::GoLanguage;
 use super::html::HtmlLanguage;
+use super::java::JavaLanguage;
 use super::javascript::{JavaScriptLanguage, JavaScriptReactLanguage};
 use super::markdown::MarkdownLanguage;
 use super::python::PythonLanguage;
@@ -61,6 +62,9 @@ impl LanguageRegistry {
         ))?;
         registry.register(Arc::new(
             GoLanguage::new().context("Failed to create Go language")?,
+        ))?;
+        registry.register(Arc::new(
+            JavaLanguage::new().context("Failed to create Java language")?,
         ))?;
 
         Ok(registry)
@@ -135,6 +139,7 @@ mod tests {
         assert!(registry.get(LanguageId::Python).is_some());
         assert!(registry.get(LanguageId::Rust).is_some());
         assert!(registry.get(LanguageId::Go).is_some());
+        assert!(registry.get(LanguageId::Java).is_some());
     }
 
     #[test]
@@ -185,6 +190,9 @@ mod tests {
 
         let go_lang = registry.get_by_extension("go").unwrap();
         assert_eq!(go_lang.id(), LanguageId::Go);
+
+        let java_lang = registry.get_by_extension("java").unwrap();
+        assert_eq!(java_lang.id(), LanguageId::Java);
     }
 
     #[test]
@@ -221,8 +229,8 @@ mod tests {
         let go_path = PathBuf::from("main.go");
         assert!(registry.get_for_path(&go_path).is_some());
 
-        let unsupported_path = PathBuf::from("script.java");
-        assert!(registry.get_for_path(&unsupported_path).is_none());
+        let java_path = PathBuf::from("Main.java");
+        assert!(registry.get_for_path(&java_path).is_some());
     }
 
     #[test]
@@ -244,6 +252,6 @@ mod tests {
         assert!(registry.is_supported(Path::new("test.pyi")));
         assert!(registry.is_supported(Path::new("test.rs")));
         assert!(registry.is_supported(Path::new("test.go")));
-        assert!(!registry.is_supported(Path::new("test.java")));
+        assert!(registry.is_supported(Path::new("test.java")));
     }
 }

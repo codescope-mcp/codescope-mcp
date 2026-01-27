@@ -1,6 +1,6 @@
 # CodeScope MCP
 
-An MCP (Model Context Protocol) server that provides symbol analysis and code navigation for TypeScript, JavaScript, Python, Rust, HTML, CSS, and Markdown projects.
+An MCP (Model Context Protocol) server that provides symbol analysis and code navigation for TypeScript, JavaScript, Python, Rust, Go, Java, HTML, CSS, and Markdown projects.
 
 ## Features
 
@@ -22,6 +22,8 @@ An MCP (Model Context Protocol) server that provides symbol analysis and code na
 | JavaScript React | `.jsx` | Same as JavaScript |
 | Python | `.py`, `.pyi` | Functions, Classes, Methods, Constructors (__init__), Variables |
 | Rust | `.rs` | Functions, Structs, Enums, Traits, Impls, Methods, Type Aliases, Modules, Consts, Statics, Macros |
+| Go | `.go` | Functions, Methods, Structs, Interfaces, Type Aliases, Consts, Variables |
+| Java | `.java` | Classes, Interfaces, Enums, Methods, Constructors, Fields, Annotations |
 | HTML | `.html`, `.htm` | Elements, IDs, Classes |
 | CSS | `.css` | Class Selectors, ID Selectors, Variables, Keyframes |
 | Markdown | `.md`, `.mdc` | Headings (H1-H6), Code Blocks, Link References |
@@ -109,6 +111,8 @@ All tools support the optional `language` parameter:
 - `"javascriptreact"` or `"jsx"` - JSX files only
 - `"python"` or `"py"` - Python files only
 - `"rust"` or `"rs"` - Rust files only
+- `"go"` - Go files only
+- `"java"` - Java files only
 - `"html"` - HTML files only
 - `"css"` - CSS files only
 - `"markdown"` or `"md"` - Markdown files only

@@ -2259,3 +2259,118 @@ fn test_go_generic_parser_handles_go_files() {
     );
     assert_eq!(lang.name(), "Go", "Should use Go language support");
 }
+
+// ======================================
+// Java tests
+// ======================================
+
+#[test]
+fn test_java_find_class_definition() {
+    let file_path = fixtures_path().join("sample.java");
+    let definitions = find_definitions(&file_path, "User");
+
+    assert!(!definitions.is_empty(), "Should find User class");
+    assert_eq!(definitions[0].0, "User");
+    assert_eq!(definitions[0].1, "class");
+}
+
+#[test]
+fn test_java_find_interface_definition() {
+    let file_path = fixtures_path().join("sample.java");
+    let definitions = find_definitions(&file_path, "Validatable");
+
+    assert!(!definitions.is_empty(), "Should find Validatable interface");
+    assert_eq!(definitions[0].0, "Validatable");
+    assert_eq!(definitions[0].1, "interface");
+}
+
+#[test]
+fn test_java_find_enum_definition() {
+    let file_path = fixtures_path().join("sample.java");
+    let definitions = find_definitions(&file_path, "UserRole");
+
+    assert!(!definitions.is_empty(), "Should find UserRole enum");
+    assert_eq!(definitions[0].0, "UserRole");
+    assert_eq!(definitions[0].1, "enum");
+}
+
+#[test]
+fn test_java_find_method_definition() {
+    let file_path = fixtures_path().join("sample.java");
+    let definitions = find_definitions(&file_path, "getDisplayName");
+
+    assert!(!definitions.is_empty(), "Should find getDisplayName method");
+    assert_eq!(definitions[0].0, "getDisplayName");
+    assert_eq!(definitions[0].1, "method");
+}
+
+#[test]
+fn test_java_find_constructor_definition() {
+    let file_path = fixtures_path().join("sample.java");
+    let definitions = find_definitions(&file_path, "User");
+
+    // Should find both class and constructor named "User"
+    let constructor_defs: Vec<_> = definitions
+        .iter()
+        .filter(|(_, k)| k == "constructor")
+        .collect();
+    assert!(!constructor_defs.is_empty(), "Should find User constructor");
+}
+
+#[test]
+fn test_java_find_field_definition() {
+    let file_path = fixtures_path().join("sample.java");
+    let definitions = find_definitions(&file_path, "id");
+
+    assert!(!definitions.is_empty(), "Should find id field");
+    assert_eq!(definitions[0].0, "id");
+    assert_eq!(definitions[0].1, "field");
+}
+
+#[test]
+fn test_java_find_annotation_definition() {
+    let file_path = fixtures_path().join("sample.java");
+    let definitions = find_definitions(&file_path, "Deprecated");
+
+    assert!(!definitions.is_empty(), "Should find Deprecated annotation");
+    assert_eq!(definitions[0].0, "Deprecated");
+    assert_eq!(definitions[0].1, "annotation");
+}
+
+#[test]
+fn test_java_find_usages() {
+    let file_path = fixtures_path().join("sample.java");
+    let count = count_usages(&file_path, "User");
+
+    assert!(count > 0, "Should find 'User' usages in Java file");
+}
+
+#[test]
+fn test_java_find_todo_comments() {
+    let file_path = fixtures_path().join("sample.java");
+
+    let matches = find_comments_in_file(&file_path, "TODO").expect("Failed to find comments");
+
+    assert!(
+        !matches.is_empty(),
+        "Should find TODO comments in Java file"
+    );
+}
+
+#[test]
+fn test_java_generic_parser_handles_java_files() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.java");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let result = parser.parse_with_language(&file_path, &source_code);
+
+    assert!(result.is_ok(), "GenericParser should handle .java files");
+    let (tree, lang) = result.unwrap();
+    assert!(
+        tree.root_node().child_count() > 0,
+        "Should produce valid AST with children"
+    );
+    assert_eq!(lang.name(), "Java", "Should use Java language support");
+}

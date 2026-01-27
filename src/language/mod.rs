@@ -1,6 +1,7 @@
 mod css;
 mod go;
 mod html;
+mod java;
 mod javascript;
 mod markdown;
 mod python;
@@ -12,6 +13,7 @@ mod typescript;
 pub use css::CssLanguage;
 pub use go::GoLanguage;
 pub use html::HtmlLanguage;
+pub use java::JavaLanguage;
 pub use javascript::{JavaScriptLanguage, JavaScriptReactLanguage};
 pub use markdown::MarkdownLanguage;
 pub use python::PythonLanguage;
