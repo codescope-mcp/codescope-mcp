@@ -9,6 +9,7 @@ use super::html::HtmlLanguage;
 use super::javascript::{JavaScriptLanguage, JavaScriptReactLanguage};
 use super::markdown::MarkdownLanguage;
 use super::python::PythonLanguage;
+use super::rust::RustLanguage;
 use super::traits::{LanguageId, LanguageSupport};
 use super::typescript::{TypeScriptLanguage, TypeScriptReactLanguage};
 
@@ -53,6 +54,9 @@ impl LanguageRegistry {
         ))?;
         registry.register(Arc::new(
             PythonLanguage::new().context("Failed to create Python language")?,
+        ))?;
+        registry.register(Arc::new(
+            RustLanguage::new().context("Failed to create Rust language")?,
         ))?;
 
         Ok(registry)
@@ -125,6 +129,7 @@ mod tests {
         assert!(registry.get(LanguageId::Html).is_some());
         assert!(registry.get(LanguageId::Css).is_some());
         assert!(registry.get(LanguageId::Python).is_some());
+        assert!(registry.get(LanguageId::Rust).is_some());
     }
 
     #[test]
@@ -169,6 +174,9 @@ mod tests {
 
         let pyi_lang = registry.get_by_extension("pyi").unwrap();
         assert_eq!(pyi_lang.id(), LanguageId::Python);
+
+        let rs_lang = registry.get_by_extension("rs").unwrap();
+        assert_eq!(rs_lang.id(), LanguageId::Rust);
     }
 
     #[test]
@@ -199,7 +207,10 @@ mod tests {
         let py_path = PathBuf::from("script.py");
         assert!(registry.get_for_path(&py_path).is_some());
 
-        let unsupported_path = PathBuf::from("script.rs");
+        let rs_path = PathBuf::from("script.rs");
+        assert!(registry.get_for_path(&rs_path).is_some());
+
+        let unsupported_path = PathBuf::from("script.go");
         assert!(registry.get_for_path(&unsupported_path).is_none());
     }
 
@@ -220,6 +231,7 @@ mod tests {
         assert!(registry.is_supported(Path::new("test.css")));
         assert!(registry.is_supported(Path::new("test.py")));
         assert!(registry.is_supported(Path::new("test.pyi")));
-        assert!(!registry.is_supported(Path::new("test.rs")));
+        assert!(registry.is_supported(Path::new("test.rs")));
+        assert!(!registry.is_supported(Path::new("test.go")));
     }
 }

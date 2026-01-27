@@ -33,6 +33,14 @@ pub enum SymbolKind {
     CssIdSelector,
     CssVariable,
     CssKeyframes,
+    // Rust
+    Struct,
+    Trait,
+    Impl,
+    Module,
+    Const,
+    Static,
+    Macro,
 }
 
 impl std::fmt::Display for SymbolKind {
@@ -62,6 +70,13 @@ impl std::fmt::Display for SymbolKind {
             SymbolKind::CssIdSelector => write!(f, "CssIdSelector"),
             SymbolKind::CssVariable => write!(f, "CssVariable"),
             SymbolKind::CssKeyframes => write!(f, "CssKeyframes"),
+            SymbolKind::Struct => write!(f, "Struct"),
+            SymbolKind::Trait => write!(f, "Trait"),
+            SymbolKind::Impl => write!(f, "Impl"),
+            SymbolKind::Module => write!(f, "Module"),
+            SymbolKind::Const => write!(f, "Const"),
+            SymbolKind::Static => write!(f, "Static"),
+            SymbolKind::Macro => write!(f, "Macro"),
         }
     }
 }
