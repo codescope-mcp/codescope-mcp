@@ -108,9 +108,9 @@ impl TypeScriptParser {
 
     /// Check if a file is a TypeScript/TSX file
     pub fn is_typescript_file(path: &Path) -> bool {
-        match path.extension().and_then(|ext| ext.to_str()) {
-            Some("ts") | Some("tsx") => true,
-            _ => false,
-        }
+        matches!(
+            path.extension().and_then(|ext| ext.to_str()),
+            Some("ts") | Some("tsx")
+        )
     }
 }

@@ -31,7 +31,7 @@ pub fn find_definitions_in_file(
         for capture in m.captures {
             let capture_name = &query.capture_names()[capture.index as usize];
 
-            match capture_name.as_ref() {
+            match &**capture_name {
                 "name" => {
                     name = Some(capture.node.utf8_text(source_code.as_bytes()).unwrap_or(""));
                 }
