@@ -41,6 +41,13 @@ pub enum SymbolKind {
     Const,
     Static,
     Macro,
+    // SQL
+    Table,
+    View,
+    Procedure,
+    Index,
+    Trigger,
+    Column,
 }
 
 impl std::fmt::Display for SymbolKind {
@@ -77,6 +84,12 @@ impl std::fmt::Display for SymbolKind {
             SymbolKind::Const => write!(f, "Const"),
             SymbolKind::Static => write!(f, "Static"),
             SymbolKind::Macro => write!(f, "Macro"),
+            SymbolKind::Table => write!(f, "Table"),
+            SymbolKind::View => write!(f, "View"),
+            SymbolKind::Procedure => write!(f, "Procedure"),
+            SymbolKind::Index => write!(f, "Index"),
+            SymbolKind::Trigger => write!(f, "Trigger"),
+            SymbolKind::Column => write!(f, "Column"),
         }
     }
 }

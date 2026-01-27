@@ -2374,3 +2374,134 @@ fn test_java_generic_parser_handles_java_files() {
     );
     assert_eq!(lang.name(), "Java", "Should use Java language support");
 }
+
+// ======================================
+// SQL tests
+// ======================================
+
+#[test]
+fn test_sql_find_table_definition() {
+    let file_path = fixtures_path().join("sample.sql");
+    let definitions = find_definitions(&file_path, "users");
+
+    assert!(!definitions.is_empty(), "Should find users table");
+    assert_eq!(definitions[0].0, "users");
+    assert_eq!(definitions[0].1, "table");
+}
+
+#[test]
+fn test_sql_find_multiple_tables() {
+    let file_path = fixtures_path().join("sample.sql");
+
+    let users_defs = find_definitions(&file_path, "users");
+    assert!(!users_defs.is_empty(), "Should find users table");
+
+    let orders_defs = find_definitions(&file_path, "orders");
+    assert!(!orders_defs.is_empty(), "Should find orders table");
+}
+
+#[test]
+fn test_sql_find_view_definition() {
+    let file_path = fixtures_path().join("sample.sql");
+    let definitions = find_definitions(&file_path, "active_users");
+
+    assert!(!definitions.is_empty(), "Should find active_users view");
+    assert_eq!(definitions[0].0, "active_users");
+    assert_eq!(definitions[0].1, "view");
+}
+
+#[test]
+fn test_sql_find_multiple_views() {
+    let file_path = fixtures_path().join("sample.sql");
+
+    let active_users_defs = find_definitions(&file_path, "active_users");
+    assert!(
+        !active_users_defs.is_empty(),
+        "Should find active_users view"
+    );
+
+    let user_orders_defs = find_definitions(&file_path, "user_orders");
+    assert!(!user_orders_defs.is_empty(), "Should find user_orders view");
+}
+
+#[test]
+fn test_sql_find_index_definition() {
+    let file_path = fixtures_path().join("sample.sql");
+    let definitions = find_definitions(&file_path, "idx_users_email");
+
+    assert!(!definitions.is_empty(), "Should find idx_users_email index");
+    assert_eq!(definitions[0].0, "idx_users_email");
+    assert_eq!(definitions[0].1, "index");
+}
+
+#[test]
+fn test_sql_find_function_definition() {
+    let file_path = fixtures_path().join("sample.sql");
+    let definitions = find_definitions(&file_path, "get_user_count");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find get_user_count function"
+    );
+    assert_eq!(definitions[0].0, "get_user_count");
+    assert_eq!(definitions[0].1, "function");
+}
+
+#[test]
+fn test_sql_find_trigger_definition() {
+    let file_path = fixtures_path().join("sample.sql");
+    let definitions = find_definitions(&file_path, "update_timestamp");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find update_timestamp trigger"
+    );
+    assert_eq!(definitions[0].0, "update_timestamp");
+    assert_eq!(definitions[0].1, "trigger");
+}
+
+#[test]
+fn test_sql_find_column_definition() {
+    let file_path = fixtures_path().join("sample.sql");
+    let definitions = find_definitions(&file_path, "email");
+
+    // email appears as a column in the users table
+    let column_defs: Vec<_> = definitions.iter().filter(|(_, k)| k == "column").collect();
+    assert!(!column_defs.is_empty(), "Should find email column");
+}
+
+#[test]
+fn test_sql_find_usages() {
+    let file_path = fixtures_path().join("sample.sql");
+    let count = count_usages(&file_path, "users");
+
+    assert!(count > 0, "Should find 'users' usages in SQL file");
+}
+
+// Note: find_comments_in_file only supports // and /* */ style comments.
+// SQL uses -- for single-line comments which is not yet supported.
+// This test is commented out until SQL comment support is added.
+// #[test]
+// fn test_sql_find_todo_comments() {
+//     let file_path = fixtures_path().join("sample.sql");
+//     let matches = find_comments_in_file(&file_path, "TODO").expect("Failed to find comments");
+//     assert!(!matches.is_empty(), "Should find TODO comments in SQL file");
+// }
+
+#[test]
+fn test_sql_generic_parser_handles_sql_files() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.sql");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let result = parser.parse_with_language(&file_path, &source_code);
+
+    assert!(result.is_ok(), "GenericParser should handle .sql files");
+    let (tree, lang) = result.unwrap();
+    assert!(
+        tree.root_node().child_count() > 0,
+        "Should produce valid AST with children"
+    );
+    assert_eq!(lang.name(), "Sql", "Should use Sql language support");
+}

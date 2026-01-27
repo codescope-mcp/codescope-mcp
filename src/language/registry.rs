@@ -12,6 +12,7 @@ use super::javascript::{JavaScriptLanguage, JavaScriptReactLanguage};
 use super::markdown::MarkdownLanguage;
 use super::python::PythonLanguage;
 use super::rust::RustLanguage;
+use super::sql::SqlLanguage;
 use super::traits::{LanguageId, LanguageSupport};
 use super::typescript::{TypeScriptLanguage, TypeScriptReactLanguage};
 
@@ -65,6 +66,9 @@ impl LanguageRegistry {
         ))?;
         registry.register(Arc::new(
             JavaLanguage::new().context("Failed to create Java language")?,
+        ))?;
+        registry.register(Arc::new(
+            SqlLanguage::new().context("Failed to create SQL language")?,
         ))?;
 
         Ok(registry)
@@ -140,6 +144,7 @@ mod tests {
         assert!(registry.get(LanguageId::Rust).is_some());
         assert!(registry.get(LanguageId::Go).is_some());
         assert!(registry.get(LanguageId::Java).is_some());
+        assert!(registry.get(LanguageId::Sql).is_some());
     }
 
     #[test]
@@ -193,6 +198,9 @@ mod tests {
 
         let java_lang = registry.get_by_extension("java").unwrap();
         assert_eq!(java_lang.id(), LanguageId::Java);
+
+        let sql_lang = registry.get_by_extension("sql").unwrap();
+        assert_eq!(sql_lang.id(), LanguageId::Sql);
     }
 
     #[test]
@@ -231,6 +239,9 @@ mod tests {
 
         let java_path = PathBuf::from("Main.java");
         assert!(registry.get_for_path(&java_path).is_some());
+
+        let sql_path = PathBuf::from("schema.sql");
+        assert!(registry.get_for_path(&sql_path).is_some());
     }
 
     #[test]
@@ -253,5 +264,6 @@ mod tests {
         assert!(registry.is_supported(Path::new("test.rs")));
         assert!(registry.is_supported(Path::new("test.go")));
         assert!(registry.is_supported(Path::new("test.java")));
+        assert!(registry.is_supported(Path::new("test.sql")));
     }
 }

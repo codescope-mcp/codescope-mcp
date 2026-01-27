@@ -7,6 +7,7 @@ mod markdown;
 mod python;
 mod registry;
 mod rust;
+mod sql;
 mod traits;
 mod typescript;
 
@@ -19,5 +20,6 @@ pub use markdown::MarkdownLanguage;
 pub use python::PythonLanguage;
 pub use registry::LanguageRegistry;
 pub use rust::RustLanguage;
+pub use sql::SqlLanguage;
 pub use traits::{LanguageId, LanguageSupport, SymbolKindMapping};
 pub use typescript::{TypeScriptLanguage, TypeScriptReactLanguage};
