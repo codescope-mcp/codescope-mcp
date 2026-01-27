@@ -111,7 +111,10 @@ fn is_in_import_statement(node: tree_sitter::Node) -> bool {
 
 /// Extract member access information from a node
 /// Returns (UsageKind, Option<object_name>)
-fn extract_member_access_info(node: tree_sitter::Node, source: &str) -> (UsageKind, Option<String>) {
+fn extract_member_access_info(
+    node: tree_sitter::Node,
+    source: &str,
+) -> (UsageKind, Option<String>) {
     if let Some(parent) = node.parent() {
         match parent.kind() {
             "member_expression" => {
@@ -129,7 +132,9 @@ fn extract_member_access_info(node: tree_sitter::Node, source: &str) -> (UsageKi
                             if let Some(grandparent) = parent.parent() {
                                 if grandparent.kind() == "call_expression" {
                                     // Verify the member_expression is the function being called
-                                    if let Some(func_node) = grandparent.child_by_field_name("function") {
+                                    if let Some(func_node) =
+                                        grandparent.child_by_field_name("function")
+                                    {
                                         if func_node.id() == parent.id() {
                                             return (UsageKind::MethodCall, object_name);
                                         }

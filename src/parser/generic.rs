@@ -30,14 +30,11 @@ impl GenericParser {
 
     /// Set the language for the given file path
     fn set_language_for_file(&mut self, path: &Path) -> Result<&Arc<dyn LanguageSupport>> {
-        let language = self
-            .registry
-            .get_for_path(path)
-            .context(format!(
-                "Unsupported file type for path '{}'. Supported extensions: {}",
-                path.display(),
-                self.registry.supported_extensions().join(", ")
-            ))?;
+        let language = self.registry.get_for_path(path).context(format!(
+            "Unsupported file type for path '{}'. Supported extensions: {}",
+            path.display(),
+            self.registry.supported_extensions().join(", ")
+        ))?;
 
         let lang_id = language.id();
 

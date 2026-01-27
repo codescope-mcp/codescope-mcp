@@ -33,14 +33,14 @@ impl TypeScriptParser {
         let definitions_query_src = include_str!("../../queries/typescript/definitions.scm");
         let usages_query_src = include_str!("../../queries/typescript/usages.scm");
 
-        let definitions_query_ts =
-            Query::new(&ts_language, definitions_query_src).context("Failed to parse TS definitions query")?;
-        let definitions_query_tsx =
-            Query::new(&tsx_language, definitions_query_src).context("Failed to parse TSX definitions query")?;
-        let usages_query_ts =
-            Query::new(&ts_language, usages_query_src).context("Failed to parse TS usages query")?;
-        let usages_query_tsx =
-            Query::new(&tsx_language, usages_query_src).context("Failed to parse TSX usages query")?;
+        let definitions_query_ts = Query::new(&ts_language, definitions_query_src)
+            .context("Failed to parse TS definitions query")?;
+        let definitions_query_tsx = Query::new(&tsx_language, definitions_query_src)
+            .context("Failed to parse TSX definitions query")?;
+        let usages_query_ts = Query::new(&ts_language, usages_query_src)
+            .context("Failed to parse TS usages query")?;
+        let usages_query_tsx = Query::new(&tsx_language, usages_query_src)
+            .context("Failed to parse TSX usages query")?;
 
         // Set default language
         parser.set_language(&ts_language)?;
@@ -108,9 +108,9 @@ impl TypeScriptParser {
 
     /// Check if a file is a TypeScript/TSX file
     pub fn is_typescript_file(path: &Path) -> bool {
-        match path.extension().and_then(|ext| ext.to_str()) {
-            Some("ts") | Some("tsx") => true,
-            _ => false,
-        }
+        matches!(
+            path.extension().and_then(|ext| ext.to_str()),
+            Some("ts") | Some("tsx")
+        )
     }
 }

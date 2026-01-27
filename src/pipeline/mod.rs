@@ -57,10 +57,10 @@ impl FilePipeline {
             let path = entry.path();
             if path.is_file() && self.registry.is_supported(path) {
                 // Check exclusions
-                if !self.config.should_exclude(
-                    path,
-                    self.additional_excludes.as_deref(),
-                ) {
+                if !self
+                    .config
+                    .should_exclude(path, self.additional_excludes.as_deref())
+                {
                     files.push(path.to_path_buf());
                 }
             }
