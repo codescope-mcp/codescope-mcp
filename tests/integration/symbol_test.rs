@@ -1519,3 +1519,343 @@ fn test_markdown_link_reference_definition() {
         "Should find link reference definitions"
     );
 }
+
+// ======================================
+// Common helper for HTML/CSS tests
+// ======================================
+
+/// Generic helper function to find symbol definitions using GenericParser.
+/// This is a common helper that can be reused across different language tests.
+fn find_definitions(file_path: &std::path::Path, symbol_name: &str) -> Vec<(String, String)> {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+
+    let source_code = std::fs::read_to_string(file_path).expect("Failed to read file");
+    let (tree, lang) = parser
+        .parse_with_language(file_path, &source_code)
+        .expect("Failed to parse file");
+
+    let query = lang.definitions_query();
+    let mut cursor = tree_sitter::QueryCursor::new();
+
+    use streaming_iterator::StreamingIterator;
+    let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
+
+    let mut results = Vec::new();
+    while let Some(m) = matches.next() {
+        let mut name: Option<String> = None;
+        let mut kind: Option<String> = None;
+
+        for capture in m.captures {
+            let capture_name = &query.capture_names()[capture.index as usize];
+            if *capture_name == "name" {
+                name = Some(
+                    capture
+                        .node
+                        .utf8_text(source_code.as_bytes())
+                        .unwrap_or("")
+                        .to_string(),
+                );
+            } else if capture_name.starts_with("definition.") {
+                kind = Some(capture_name.replace("definition.", ""));
+            }
+        }
+
+        if let (Some(n), Some(k)) = (name, kind) {
+            if n == symbol_name {
+                results.push((n, k));
+            }
+        }
+    }
+
+    results
+}
+
+// ======================================
+// HTML tests
+// ======================================
+
+#[test]
+fn test_html_find_element() {
+    let file_path = fixtures_path().join("sample.html");
+    let definitions = find_definitions(&file_path, "header");
+
+    assert!(!definitions.is_empty(), "Should find header element");
+    assert_eq!(definitions[0].0, "header");
+    assert_eq!(definitions[0].1, "element");
+}
+
+#[test]
+fn test_html_find_self_closing_element() {
+    let file_path = fixtures_path().join("sample.html");
+    let definitions = find_definitions(&file_path, "meta");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find self-closing meta element"
+    );
+    assert_eq!(definitions[0].0, "meta");
+    assert_eq!(definitions[0].1, "element");
+}
+
+#[test]
+fn test_html_find_various_elements() {
+    let file_path = fixtures_path().join("sample.html");
+
+    // Test various HTML elements
+    let html_defs = find_definitions(&file_path, "html");
+    assert!(!html_defs.is_empty(), "Should find html element");
+
+    let body_defs = find_definitions(&file_path, "body");
+    assert!(!body_defs.is_empty(), "Should find body element");
+
+    let div_defs = find_definitions(&file_path, "div");
+    assert!(!div_defs.is_empty(), "Should find div element");
+
+    let span_defs = find_definitions(&file_path, "span");
+    assert!(!span_defs.is_empty(), "Should find span element");
+
+    let footer_defs = find_definitions(&file_path, "footer");
+    assert!(!footer_defs.is_empty(), "Should find footer element");
+}
+
+#[test]
+fn test_html_find_id_attribute() {
+    let file_path = fixtures_path().join("sample.html");
+    let definitions = find_definitions(&file_path, "main-header");
+
+    assert!(!definitions.is_empty(), "Should find main-header id");
+    assert_eq!(definitions[0].0, "main-header");
+    assert_eq!(definitions[0].1, "id");
+}
+
+#[test]
+fn test_html_find_various_ids() {
+    let file_path = fixtures_path().join("sample.html");
+
+    // Test various ID attributes
+    let content_defs = find_definitions(&file_path, "content");
+    assert!(!content_defs.is_empty(), "Should find content id");
+    assert_eq!(content_defs[0].1, "id");
+
+    let user_card_defs = find_definitions(&file_path, "user-card");
+    assert!(!user_card_defs.is_empty(), "Should find user-card id");
+    assert_eq!(user_card_defs[0].1, "id");
+
+    let footer_defs = find_definitions(&file_path, "footer");
+    // footer is both an element and an id
+    let footer_ids: Vec<_> = footer_defs.iter().filter(|(_, k)| k == "id").collect();
+    assert!(!footer_ids.is_empty(), "Should find footer id");
+}
+
+#[test]
+fn test_html_find_class_attribute() {
+    let file_path = fixtures_path().join("sample.html");
+    let definitions = find_definitions(&file_path, "header-container");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find header-container class"
+    );
+    assert_eq!(definitions[0].0, "header-container");
+    assert_eq!(definitions[0].1, "class");
+}
+
+#[test]
+fn test_html_find_various_classes() {
+    let file_path = fixtures_path().join("sample.html");
+
+    // Test various class attributes
+    let main_content_defs = find_definitions(&file_path, "main-content");
+    assert!(
+        !main_content_defs.is_empty(),
+        "Should find main-content class"
+    );
+    assert_eq!(main_content_defs[0].1, "class");
+
+    let username_defs = find_definitions(&file_path, "username");
+    assert!(!username_defs.is_empty(), "Should find username class");
+    assert_eq!(username_defs[0].1, "class");
+
+    let footer_container_defs = find_definitions(&file_path, "footer-container");
+    assert!(
+        !footer_container_defs.is_empty(),
+        "Should find footer-container class"
+    );
+    assert_eq!(footer_container_defs[0].1, "class");
+}
+
+#[test]
+fn test_html_multi_class_limitation() {
+    // This test documents the known limitation where multi-class attributes
+    // are captured as a single value rather than separate classes.
+    let file_path = fixtures_path().join("sample.html");
+
+    // "card user-card" is captured as a single class definition
+    let combined_class = find_definitions(&file_path, "card user-card");
+    assert!(
+        !combined_class.is_empty(),
+        "Multi-class attribute should be captured as single value"
+    );
+
+    // Individual class "card" is NOT found separately (known limitation)
+    let single_card = find_definitions(&file_path, "card");
+    // This will be empty because we capture the entire attribute value
+    assert!(
+        single_card.is_empty(),
+        "Individual class 'card' not found separately (known limitation)"
+    );
+}
+
+#[test]
+fn test_html_generic_parser_handles_html_files() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.html");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let result = parser.parse_with_language(&file_path, &source_code);
+
+    assert!(result.is_ok(), "GenericParser should handle .html files");
+    let (tree, lang) = result.unwrap();
+    assert!(
+        tree.root_node().child_count() > 0,
+        "Should produce valid AST with children"
+    );
+    assert_eq!(lang.name(), "Html", "Should use Html language support");
+}
+
+// ======================================
+// CSS tests
+// ======================================
+
+#[test]
+fn test_css_find_class_selector() {
+    let file_path = fixtures_path().join("sample.css");
+    let definitions = find_definitions(&file_path, "header-container");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find header-container class selector"
+    );
+    assert_eq!(definitions[0].0, "header-container");
+    assert_eq!(definitions[0].1, "class_selector");
+}
+
+#[test]
+fn test_css_find_various_class_selectors() {
+    let file_path = fixtures_path().join("sample.css");
+
+    // Test various class selectors
+    let card_defs = find_definitions(&file_path, "card");
+    assert!(!card_defs.is_empty(), "Should find .card class selector");
+    assert_eq!(card_defs[0].1, "class_selector");
+
+    let user_card_defs = find_definitions(&file_path, "user-card");
+    assert!(
+        !user_card_defs.is_empty(),
+        "Should find .user-card class selector"
+    );
+    assert_eq!(user_card_defs[0].1, "class_selector");
+
+    let username_defs = find_definitions(&file_path, "username");
+    assert!(
+        !username_defs.is_empty(),
+        "Should find .username class selector"
+    );
+    assert_eq!(username_defs[0].1, "class_selector");
+}
+
+#[test]
+fn test_css_find_id_selector() {
+    let file_path = fixtures_path().join("sample.css");
+    let definitions = find_definitions(&file_path, "main-header");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find main-header id selector"
+    );
+    assert_eq!(definitions[0].0, "main-header");
+    assert_eq!(definitions[0].1, "id_selector");
+}
+
+#[test]
+fn test_css_find_various_id_selectors() {
+    let file_path = fixtures_path().join("sample.css");
+
+    // Test various ID selectors
+    let content_defs = find_definitions(&file_path, "content");
+    assert!(!content_defs.is_empty(), "Should find #content id selector");
+    assert_eq!(content_defs[0].1, "id_selector");
+}
+
+#[test]
+fn test_css_find_css_variable() {
+    let file_path = fixtures_path().join("sample.css");
+    let definitions = find_definitions(&file_path, "--primary-color");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find --primary-color CSS variable"
+    );
+    assert_eq!(definitions[0].0, "--primary-color");
+    assert_eq!(definitions[0].1, "variable");
+}
+
+#[test]
+fn test_css_find_various_css_variables() {
+    let file_path = fixtures_path().join("sample.css");
+
+    // Test additional CSS variables
+    let secondary_defs = find_definitions(&file_path, "--secondary-color");
+    assert!(
+        !secondary_defs.is_empty(),
+        "Should find --secondary-color CSS variable"
+    );
+    assert_eq!(secondary_defs[0].1, "variable");
+
+    let text_color_defs = find_definitions(&file_path, "--text-color");
+    assert!(
+        !text_color_defs.is_empty(),
+        "Should find --text-color CSS variable"
+    );
+    assert_eq!(text_color_defs[0].1, "variable");
+}
+
+#[test]
+fn test_css_find_keyframes() {
+    let file_path = fixtures_path().join("sample.css");
+    let definitions = find_definitions(&file_path, "fadeIn");
+
+    assert!(!definitions.is_empty(), "Should find fadeIn keyframes");
+    assert_eq!(definitions[0].0, "fadeIn");
+    assert_eq!(definitions[0].1, "keyframes");
+}
+
+#[test]
+fn test_css_find_various_keyframes() {
+    let file_path = fixtures_path().join("sample.css");
+
+    // Test additional keyframes
+    let slide_in_defs = find_definitions(&file_path, "slideIn");
+    assert!(!slide_in_defs.is_empty(), "Should find slideIn keyframes");
+    assert_eq!(slide_in_defs[0].1, "keyframes");
+}
+
+#[test]
+fn test_css_generic_parser_handles_css_files() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.css");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let result = parser.parse_with_language(&file_path, &source_code);
+
+    assert!(result.is_ok(), "GenericParser should handle .css files");
+    let (tree, lang) = result.unwrap();
+    assert!(
+        tree.root_node().child_count() > 0,
+        "Should produce valid AST with children"
+    );
+    assert_eq!(lang.name(), "Css", "Should use Css language support");
+}

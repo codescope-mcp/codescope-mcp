@@ -24,6 +24,15 @@ pub enum SymbolKind {
     Heading6,
     CodeBlock,
     Link,
+    // HTML
+    HtmlElement,
+    HtmlId,
+    HtmlClass,
+    // CSS
+    CssClassSelector,
+    CssIdSelector,
+    CssVariable,
+    CssKeyframes,
 }
 
 impl std::fmt::Display for SymbolKind {
@@ -46,6 +55,13 @@ impl std::fmt::Display for SymbolKind {
             SymbolKind::Heading6 => write!(f, "Heading6"),
             SymbolKind::CodeBlock => write!(f, "CodeBlock"),
             SymbolKind::Link => write!(f, "Link"),
+            SymbolKind::HtmlElement => write!(f, "HtmlElement"),
+            SymbolKind::HtmlId => write!(f, "HtmlId"),
+            SymbolKind::HtmlClass => write!(f, "HtmlClass"),
+            SymbolKind::CssClassSelector => write!(f, "CssClassSelector"),
+            SymbolKind::CssIdSelector => write!(f, "CssIdSelector"),
+            SymbolKind::CssVariable => write!(f, "CssVariable"),
+            SymbolKind::CssKeyframes => write!(f, "CssKeyframes"),
         }
     }
 }
