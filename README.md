@@ -16,9 +16,9 @@ An MCP (Model Context Protocol) server that provides symbol analysis and code na
 
 | Language | Extensions | Symbol Types |
 |----------|------------|--------------|
-| TypeScript | `.ts` | Functions, Classes, Methods, Interfaces, Enums, Variables, Type Aliases |
+| TypeScript | `.ts` | Functions, Classes, Methods, Constructors, Interfaces, Enums, Variables, Arrow Functions, Type Aliases |
 | TypeScript React | `.tsx` | Same as TypeScript |
-| Markdown | `.md`, `.mdc` | Headings (H1-H6), Code Blocks, Link References |
+| Markdown | `.md`, `.mdc` | Headings (H1-H6), Code Blocks (with language), Link References |
 
 ## Installation
 

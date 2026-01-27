@@ -28,10 +28,10 @@
   (atx_h6_marker)
   (inline) @name) @definition.heading6
 
-; Fenced code block
+; Fenced code block (only with language specification)
 (fenced_code_block
   (info_string
-    (language) @name)?) @definition.code_block
+    (language) @name)) @definition.code_block
 
 ; Link reference definition
 (link_reference_definition

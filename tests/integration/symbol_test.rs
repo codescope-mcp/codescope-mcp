@@ -1,7 +1,13 @@
 use std::path::PathBuf;
 
+use std::sync::Arc;
+
+use codescope_mcp::language::LanguageRegistry;
+use codescope_mcp::parser::generic::GenericParser;
 use codescope_mcp::parser::typescript::TypeScriptParser;
-use codescope_mcp::symbol::comment::{find_comments_in_file, get_code_at_location};
+use codescope_mcp::symbol::comment::{
+    find_comments_in_file, find_text_in_markdown_file, get_code_at_location,
+};
 use codescope_mcp::symbol::definition::{find_definitions_in_file, find_symbol_at_location};
 use codescope_mcp::symbol::types::{CommentType, UsageKind};
 use codescope_mcp::symbol::usage::find_usages_in_file;
@@ -815,10 +821,6 @@ fn test_find_symbol_at_location_constructor() {
 
     assert!(symbol.is_some(), "Should find constructor at line 12");
     let symbol = symbol.unwrap();
-    println!(
-        "Found symbol: name={}, kind={}",
-        symbol.name, symbol.node_kind
-    );
     assert_eq!(
         symbol.name, "constructor",
         "Symbol name should be 'constructor'"
@@ -884,7 +886,6 @@ fn test_find_symbol_at_location_arrow_function() {
         "Arrow function should start at line 29"
     );
     assert_eq!(symbol.end_line, 35, "Arrow function should end at line 35");
-    println!("Arrow function kind: {}", symbol.node_kind);
 }
 
 #[test]
@@ -898,10 +899,6 @@ fn test_find_symbol_at_location_class() {
 
     assert!(symbol.is_some(), "Should find symbol at line 10");
     let symbol = symbol.unwrap();
-    println!(
-        "Found at line 10: name={}, kind={}, start={}, end={}",
-        symbol.name, symbol.node_kind, symbol.start_line, symbol.end_line
-    );
     // Should be UserService class since line 10 is the property declaration
     // which is not captured as a symbol
     assert_eq!(symbol.name, "UserService", "Should find UserService class");
@@ -960,7 +957,10 @@ fn test_find_symbol_at_location_outside_symbols() {
     );
 }
 
+/// Debug test for manual inspection of symbol detection at each line.
+/// Run with: cargo test test_find_symbol_at_location_debug -- --ignored --nocapture
 #[test]
+#[ignore]
 fn test_find_symbol_at_location_debug() {
     let mut parser = TypeScriptParser::new().expect("Failed to create parser");
     let file_path = fixtures_path().join("sample.ts");
@@ -977,4 +977,191 @@ fn test_find_symbol_at_location_debug() {
             None => println!("Line {}: <none>", line),
         }
     }
+}
+
+// ======================================
+// Markdown tests
+// ======================================
+
+#[test]
+fn test_markdown_text_search() {
+    let file_path = fixtures_path().join("sample.md");
+
+    let matches = find_text_in_markdown_file(&file_path, "Installation").unwrap();
+
+    assert!(
+        !matches.is_empty(),
+        "Should find 'Installation' in markdown"
+    );
+    // Should find the heading at line 14
+    assert!(
+        matches.iter().any(|m| m.line == 14),
+        "Should find Installation heading at line 14"
+    );
+}
+
+#[test]
+fn test_markdown_code_block_search() {
+    let file_path = fixtures_path().join("sample.md");
+
+    let matches = find_text_in_markdown_file(&file_path, "npm install").unwrap();
+
+    assert!(
+        !matches.is_empty(),
+        "Should find 'npm install' in code block"
+    );
+}
+
+#[test]
+fn test_markdown_link_reference_search() {
+    let file_path = fixtures_path().join("sample.md");
+
+    let matches = find_text_in_markdown_file(&file_path, "example.com").unwrap();
+
+    assert!(
+        !matches.is_empty(),
+        "Should find 'example.com' in link references"
+    );
+}
+
+#[test]
+fn test_markdown_heading_detection_with_generic_parser() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.md");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let (tree, lang) = parser
+        .parse_with_language(&file_path, &source_code)
+        .expect("Failed to parse file");
+
+    let query = lang.definitions_query();
+    let mut cursor = tree_sitter::QueryCursor::new();
+
+    use streaming_iterator::StreamingIterator;
+    let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
+
+    let mut headings = Vec::new();
+    while let Some(m) = matches.next() {
+        for capture in m.captures {
+            let capture_name = &query.capture_names()[capture.index as usize];
+            if capture_name.starts_with("definition.heading") {
+                let text = capture.node.utf8_text(source_code.as_bytes()).unwrap_or("");
+                headings.push((capture_name.to_string(), text.to_string()));
+            }
+        }
+    }
+
+    // Should find multiple headings
+    assert!(!headings.is_empty(), "Should find headings in markdown");
+
+    // Check for specific heading levels
+    let has_h1 = headings
+        .iter()
+        .any(|(name, _)| name == "definition.heading1");
+    let has_h2 = headings
+        .iter()
+        .any(|(name, _)| name == "definition.heading2");
+    let has_h3 = headings
+        .iter()
+        .any(|(name, _)| name == "definition.heading3");
+
+    assert!(has_h1, "Should find H1 heading");
+    assert!(has_h2, "Should find H2 headings");
+    assert!(has_h3, "Should find H3 headings");
+}
+
+#[test]
+fn test_markdown_code_block_with_language() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.md");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let (tree, lang) = parser
+        .parse_with_language(&file_path, &source_code)
+        .expect("Failed to parse file");
+
+    let query = lang.definitions_query();
+    let mut cursor = tree_sitter::QueryCursor::new();
+
+    use streaming_iterator::StreamingIterator;
+    let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
+
+    let mut code_blocks = Vec::new();
+    while let Some(m) = matches.next() {
+        let mut name: Option<String> = None;
+        let mut is_code_block = false;
+
+        for capture in m.captures {
+            let capture_name = &query.capture_names()[capture.index as usize];
+            if *capture_name == "name" {
+                name = Some(
+                    capture
+                        .node
+                        .utf8_text(source_code.as_bytes())
+                        .unwrap_or("")
+                        .to_string(),
+                );
+            }
+            if *capture_name == "definition.code_block" {
+                is_code_block = true;
+            }
+        }
+
+        if is_code_block {
+            if let Some(lang_name) = name {
+                code_blocks.push(lang_name);
+            }
+        }
+    }
+
+    // Should find code blocks with language specification
+    assert!(
+        !code_blocks.is_empty(),
+        "Should find code blocks with language"
+    );
+    assert!(
+        code_blocks.contains(&"bash".to_string()),
+        "Should find bash code block"
+    );
+    assert!(
+        code_blocks.contains(&"typescript".to_string()),
+        "Should find typescript code block"
+    );
+}
+
+#[test]
+fn test_markdown_link_reference_definition() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.md");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let (tree, lang) = parser
+        .parse_with_language(&file_path, &source_code)
+        .expect("Failed to parse file");
+
+    let query = lang.definitions_query();
+    let mut cursor = tree_sitter::QueryCursor::new();
+
+    use streaming_iterator::StreamingIterator;
+    let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
+
+    let mut link_refs = Vec::new();
+    while let Some(m) = matches.next() {
+        for capture in m.captures {
+            let capture_name = &query.capture_names()[capture.index as usize];
+            if *capture_name == "definition.link" {
+                let text = capture.node.utf8_text(source_code.as_bytes()).unwrap_or("");
+                link_refs.push(text.to_string());
+            }
+        }
+    }
+
+    // Should find link reference definitions
+    assert!(
+        !link_refs.is_empty(),
+        "Should find link reference definitions"
+    );
 }
