@@ -10,6 +10,8 @@ pub enum LanguageId {
     JavaScript,
     JavaScriptReact,
     Markdown,
+    Html,
+    Css,
     // Future: Python, Rust, Go, etc.
 }
 
@@ -21,6 +23,8 @@ impl std::fmt::Display for LanguageId {
             LanguageId::JavaScript => write!(f, "JavaScript"),
             LanguageId::JavaScriptReact => write!(f, "JavaScriptReact"),
             LanguageId::Markdown => write!(f, "Markdown"),
+            LanguageId::Html => write!(f, "Html"),
+            LanguageId::Css => write!(f, "Css"),
         }
     }
 }

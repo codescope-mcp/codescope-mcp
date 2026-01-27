@@ -1519,3 +1519,221 @@ fn test_markdown_link_reference_definition() {
         "Should find link reference definitions"
     );
 }
+
+// ======================================
+// HTML tests
+// ======================================
+
+/// Helper function to find HTML symbol definitions using GenericParser
+fn find_html_definitions(file_path: &std::path::Path, symbol_name: &str) -> Vec<(String, String)> {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+
+    let source_code = std::fs::read_to_string(file_path).expect("Failed to read file");
+    let (tree, lang) = parser
+        .parse_with_language(file_path, &source_code)
+        .expect("Failed to parse file");
+
+    let query = lang.definitions_query();
+    let mut cursor = tree_sitter::QueryCursor::new();
+
+    use streaming_iterator::StreamingIterator;
+    let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
+
+    let mut results = Vec::new();
+    while let Some(m) = matches.next() {
+        let mut name: Option<String> = None;
+        let mut kind: Option<String> = None;
+
+        for capture in m.captures {
+            let capture_name = &query.capture_names()[capture.index as usize];
+            if *capture_name == "name" {
+                name = Some(
+                    capture
+                        .node
+                        .utf8_text(source_code.as_bytes())
+                        .unwrap_or("")
+                        .to_string(),
+                );
+            } else if capture_name.starts_with("definition.") {
+                kind = Some(capture_name.replace("definition.", ""));
+            }
+        }
+
+        if let (Some(n), Some(k)) = (name, kind) {
+            if n == symbol_name {
+                results.push((n, k));
+            }
+        }
+    }
+
+    results
+}
+
+#[test]
+fn test_html_find_element() {
+    let file_path = fixtures_path().join("sample.html");
+    let definitions = find_html_definitions(&file_path, "header");
+
+    assert!(!definitions.is_empty(), "Should find header element");
+    assert_eq!(definitions[0].0, "header");
+    assert_eq!(definitions[0].1, "element");
+}
+
+#[test]
+fn test_html_find_id_attribute() {
+    let file_path = fixtures_path().join("sample.html");
+    let definitions = find_html_definitions(&file_path, "main-header");
+
+    assert!(!definitions.is_empty(), "Should find main-header id");
+    assert_eq!(definitions[0].0, "main-header");
+    assert_eq!(definitions[0].1, "id");
+}
+
+#[test]
+fn test_html_find_class_attribute() {
+    let file_path = fixtures_path().join("sample.html");
+    let definitions = find_html_definitions(&file_path, "header-container");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find header-container class"
+    );
+    assert_eq!(definitions[0].0, "header-container");
+    assert_eq!(definitions[0].1, "class");
+}
+
+#[test]
+fn test_html_generic_parser_handles_html_files() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.html");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let result = parser.parse_with_language(&file_path, &source_code);
+
+    assert!(result.is_ok(), "GenericParser should handle .html files");
+    let (tree, lang) = result.unwrap();
+    assert!(
+        tree.root_node().child_count() > 0,
+        "Should produce valid AST with children"
+    );
+    assert_eq!(lang.name(), "Html", "Should use Html language support");
+}
+
+// ======================================
+// CSS tests
+// ======================================
+
+/// Helper function to find CSS symbol definitions using GenericParser
+fn find_css_definitions(file_path: &std::path::Path, symbol_name: &str) -> Vec<(String, String)> {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+
+    let source_code = std::fs::read_to_string(file_path).expect("Failed to read file");
+    let (tree, lang) = parser
+        .parse_with_language(file_path, &source_code)
+        .expect("Failed to parse file");
+
+    let query = lang.definitions_query();
+    let mut cursor = tree_sitter::QueryCursor::new();
+
+    use streaming_iterator::StreamingIterator;
+    let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
+
+    let mut results = Vec::new();
+    while let Some(m) = matches.next() {
+        let mut name: Option<String> = None;
+        let mut kind: Option<String> = None;
+
+        for capture in m.captures {
+            let capture_name = &query.capture_names()[capture.index as usize];
+            if *capture_name == "name" {
+                name = Some(
+                    capture
+                        .node
+                        .utf8_text(source_code.as_bytes())
+                        .unwrap_or("")
+                        .to_string(),
+                );
+            } else if capture_name.starts_with("definition.") {
+                kind = Some(capture_name.replace("definition.", ""));
+            }
+        }
+
+        if let (Some(n), Some(k)) = (name, kind) {
+            if n == symbol_name {
+                results.push((n, k));
+            }
+        }
+    }
+
+    results
+}
+
+#[test]
+fn test_css_find_class_selector() {
+    let file_path = fixtures_path().join("sample.css");
+    let definitions = find_css_definitions(&file_path, "header-container");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find header-container class selector"
+    );
+    assert_eq!(definitions[0].0, "header-container");
+    assert_eq!(definitions[0].1, "class_selector");
+}
+
+#[test]
+fn test_css_find_id_selector() {
+    let file_path = fixtures_path().join("sample.css");
+    let definitions = find_css_definitions(&file_path, "main-header");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find main-header id selector"
+    );
+    assert_eq!(definitions[0].0, "main-header");
+    assert_eq!(definitions[0].1, "id_selector");
+}
+
+#[test]
+fn test_css_find_css_variable() {
+    let file_path = fixtures_path().join("sample.css");
+    let definitions = find_css_definitions(&file_path, "--primary-color");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find --primary-color CSS variable"
+    );
+    assert_eq!(definitions[0].0, "--primary-color");
+    assert_eq!(definitions[0].1, "variable");
+}
+
+#[test]
+fn test_css_find_keyframes() {
+    let file_path = fixtures_path().join("sample.css");
+    let definitions = find_css_definitions(&file_path, "fadeIn");
+
+    assert!(!definitions.is_empty(), "Should find fadeIn keyframes");
+    assert_eq!(definitions[0].0, "fadeIn");
+    assert_eq!(definitions[0].1, "keyframes");
+}
+
+#[test]
+fn test_css_generic_parser_handles_css_files() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.css");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let result = parser.parse_with_language(&file_path, &source_code);
+
+    assert!(result.is_ok(), "GenericParser should handle .css files");
+    let (tree, lang) = result.unwrap();
+    assert!(
+        tree.root_node().child_count() > 0,
+        "Should produce valid AST with children"
+    );
+    assert_eq!(lang.name(), "Css", "Should use Css language support");
+}

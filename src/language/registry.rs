@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 
+use super::css::CssLanguage;
+use super::html::HtmlLanguage;
 use super::javascript::{JavaScriptLanguage, JavaScriptReactLanguage};
 use super::markdown::MarkdownLanguage;
 use super::traits::{LanguageId, LanguageSupport};
@@ -41,6 +43,12 @@ impl LanguageRegistry {
         ))?;
         registry.register(Arc::new(
             MarkdownLanguage::new().context("Failed to create Markdown language")?,
+        ))?;
+        registry.register(Arc::new(
+            HtmlLanguage::new().context("Failed to create HTML language")?,
+        ))?;
+        registry.register(Arc::new(
+            CssLanguage::new().context("Failed to create CSS language")?,
         ))?;
 
         Ok(registry)
@@ -110,6 +118,8 @@ mod tests {
         assert!(registry.get(LanguageId::JavaScript).is_some());
         assert!(registry.get(LanguageId::JavaScriptReact).is_some());
         assert!(registry.get(LanguageId::Markdown).is_some());
+        assert!(registry.get(LanguageId::Html).is_some());
+        assert!(registry.get(LanguageId::Css).is_some());
     }
 
     #[test]
@@ -139,6 +149,15 @@ mod tests {
 
         let mdc_lang = registry.get_by_extension("mdc").unwrap();
         assert_eq!(mdc_lang.id(), LanguageId::Markdown);
+
+        let html_lang = registry.get_by_extension("html").unwrap();
+        assert_eq!(html_lang.id(), LanguageId::Html);
+
+        let htm_lang = registry.get_by_extension("htm").unwrap();
+        assert_eq!(htm_lang.id(), LanguageId::Html);
+
+        let css_lang = registry.get_by_extension("css").unwrap();
+        assert_eq!(css_lang.id(), LanguageId::Css);
     }
 
     #[test]
@@ -160,6 +179,12 @@ mod tests {
         let md_path = PathBuf::from("README.md");
         assert!(registry.get_for_path(&md_path).is_some());
 
+        let html_path = PathBuf::from("index.html");
+        assert!(registry.get_for_path(&html_path).is_some());
+
+        let css_path = PathBuf::from("styles.css");
+        assert!(registry.get_for_path(&css_path).is_some());
+
         let unsupported_path = PathBuf::from("script.py");
         assert!(registry.get_for_path(&unsupported_path).is_none());
     }
@@ -176,6 +201,9 @@ mod tests {
         assert!(registry.is_supported(Path::new("test.jsx")));
         assert!(registry.is_supported(Path::new("test.md")));
         assert!(registry.is_supported(Path::new("test.mdc")));
+        assert!(registry.is_supported(Path::new("test.html")));
+        assert!(registry.is_supported(Path::new("test.htm")));
+        assert!(registry.is_supported(Path::new("test.css")));
         assert!(!registry.is_supported(Path::new("test.py")));
         assert!(!registry.is_supported(Path::new("test.rs")));
     }
