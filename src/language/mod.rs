@@ -1,4 +1,5 @@
 mod css;
+mod go;
 mod html;
 mod javascript;
 mod markdown;
@@ -9,6 +10,7 @@ mod traits;
 mod typescript;
 
 pub use css::CssLanguage;
+pub use go::GoLanguage;
 pub use html::HtmlLanguage;
 pub use javascript::{JavaScriptLanguage, JavaScriptReactLanguage};
 pub use markdown::MarkdownLanguage;

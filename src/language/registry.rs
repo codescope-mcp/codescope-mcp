@@ -5,6 +5,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 
 use super::css::CssLanguage;
+use super::go::GoLanguage;
 use super::html::HtmlLanguage;
 use super::javascript::{JavaScriptLanguage, JavaScriptReactLanguage};
 use super::markdown::MarkdownLanguage;
@@ -57,6 +58,9 @@ impl LanguageRegistry {
         ))?;
         registry.register(Arc::new(
             RustLanguage::new().context("Failed to create Rust language")?,
+        ))?;
+        registry.register(Arc::new(
+            GoLanguage::new().context("Failed to create Go language")?,
         ))?;
 
         Ok(registry)
@@ -130,6 +134,7 @@ mod tests {
         assert!(registry.get(LanguageId::Css).is_some());
         assert!(registry.get(LanguageId::Python).is_some());
         assert!(registry.get(LanguageId::Rust).is_some());
+        assert!(registry.get(LanguageId::Go).is_some());
     }
 
     #[test]
@@ -177,6 +182,9 @@ mod tests {
 
         let rs_lang = registry.get_by_extension("rs").unwrap();
         assert_eq!(rs_lang.id(), LanguageId::Rust);
+
+        let go_lang = registry.get_by_extension("go").unwrap();
+        assert_eq!(go_lang.id(), LanguageId::Go);
     }
 
     #[test]
@@ -210,7 +218,10 @@ mod tests {
         let rs_path = PathBuf::from("script.rs");
         assert!(registry.get_for_path(&rs_path).is_some());
 
-        let unsupported_path = PathBuf::from("script.go");
+        let go_path = PathBuf::from("main.go");
+        assert!(registry.get_for_path(&go_path).is_some());
+
+        let unsupported_path = PathBuf::from("script.java");
         assert!(registry.get_for_path(&unsupported_path).is_none());
     }
 
@@ -232,6 +243,7 @@ mod tests {
         assert!(registry.is_supported(Path::new("test.py")));
         assert!(registry.is_supported(Path::new("test.pyi")));
         assert!(registry.is_supported(Path::new("test.rs")));
-        assert!(!registry.is_supported(Path::new("test.go")));
+        assert!(registry.is_supported(Path::new("test.go")));
+        assert!(!registry.is_supported(Path::new("test.java")));
     }
 }

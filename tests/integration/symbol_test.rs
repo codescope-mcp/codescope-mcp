@@ -1945,8 +1945,9 @@ fn test_python_find_module_variable() {
     assert_eq!(definitions[0].1, "variable");
 }
 
-/// Helper function to find Python usages using GenericParser
-fn find_py_usages(file_path: &std::path::Path, symbol_name: &str) -> Vec<String> {
+/// Helper function to count symbol usages using GenericParser.
+/// Returns the number of times the symbol appears in the file.
+fn count_usages(file_path: &std::path::Path, symbol_name: &str) -> usize {
     let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
     let mut parser = GenericParser::new(registry).expect("Failed to create parser");
 
@@ -1961,35 +1962,28 @@ fn find_py_usages(file_path: &std::path::Path, symbol_name: &str) -> Vec<String>
     use streaming_iterator::StreamingIterator;
     let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
 
-    let mut results = Vec::new();
+    let mut count = 0;
     while let Some(m) = matches.next() {
         for capture in m.captures {
             let capture_name = &query.capture_names()[capture.index as usize];
             if *capture_name == "usage" {
-                let usage_text = capture
-                    .node
-                    .utf8_text(source_code.as_bytes())
-                    .unwrap_or("")
-                    .to_string();
+                let usage_text = capture.node.utf8_text(source_code.as_bytes()).unwrap_or("");
                 if usage_text == symbol_name {
-                    results.push(usage_text);
+                    count += 1;
                 }
             }
         }
     }
 
-    results
+    count
 }
 
 #[test]
 fn test_python_find_usages() {
     let file_path = fixtures_path().join("sample.py");
-    let usages = find_py_usages(&file_path, "user");
+    let count = count_usages(&file_path, "user");
 
-    assert!(
-        !usages.is_empty(),
-        "Should find 'user' usages in Python file"
-    );
+    assert!(count > 0, "Should find 'user' usages in Python file");
 }
 
 // Note: test_python_find_todo_comments is not included because
@@ -2128,48 +2122,12 @@ fn test_rust_find_macro_definition() {
     assert_eq!(definitions[0].1, "macro");
 }
 
-/// Helper function to find Rust usages using GenericParser
-fn find_rust_usages(file_path: &std::path::Path, symbol_name: &str) -> Vec<String> {
-    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
-    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
-
-    let source_code = std::fs::read_to_string(file_path).expect("Failed to read file");
-    let (tree, lang) = parser
-        .parse_with_language(file_path, &source_code)
-        .expect("Failed to parse file");
-
-    let query = lang.usages_query();
-    let mut cursor = tree_sitter::QueryCursor::new();
-
-    use streaming_iterator::StreamingIterator;
-    let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
-
-    let mut results = Vec::new();
-    while let Some(m) = matches.next() {
-        for capture in m.captures {
-            let capture_name = &query.capture_names()[capture.index as usize];
-            if *capture_name == "usage" {
-                let usage_text = capture
-                    .node
-                    .utf8_text(source_code.as_bytes())
-                    .unwrap_or("")
-                    .to_string();
-                if usage_text == symbol_name {
-                    results.push(usage_text);
-                }
-            }
-        }
-    }
-
-    results
-}
-
 #[test]
 fn test_rust_find_usages() {
     let file_path = fixtures_path().join("sample.rs");
-    let usages = find_rust_usages(&file_path, "User");
+    let count = count_usages(&file_path, "User");
 
-    assert!(!usages.is_empty(), "Should find 'User' usages in Rust file");
+    assert!(count > 0, "Should find 'User' usages in Rust file");
 }
 
 #[test]
@@ -2188,4 +2146,116 @@ fn test_rust_generic_parser_handles_rs_files() {
         "Should produce valid AST with children"
     );
     assert_eq!(lang.name(), "Rust", "Should use Rust language support");
+}
+
+// ======================================
+// Go tests
+// ======================================
+
+#[test]
+fn test_go_find_struct_definition() {
+    let file_path = fixtures_path().join("sample.go");
+    let definitions = find_definitions(&file_path, "User");
+
+    assert!(!definitions.is_empty(), "Should find User struct");
+    assert_eq!(definitions[0].0, "User");
+    assert_eq!(definitions[0].1, "struct");
+}
+
+#[test]
+fn test_go_find_interface_definition() {
+    let file_path = fixtures_path().join("sample.go");
+    let definitions = find_definitions(&file_path, "Validatable");
+
+    assert!(!definitions.is_empty(), "Should find Validatable interface");
+    assert_eq!(definitions[0].0, "Validatable");
+    assert_eq!(definitions[0].1, "interface");
+}
+
+#[test]
+fn test_go_find_function_definition() {
+    let file_path = fixtures_path().join("sample.go");
+    let definitions = find_definitions(&file_path, "NewUser");
+
+    assert!(!definitions.is_empty(), "Should find NewUser function");
+    assert_eq!(definitions[0].0, "NewUser");
+    assert_eq!(definitions[0].1, "function");
+}
+
+#[test]
+fn test_go_find_method_definition() {
+    let file_path = fixtures_path().join("sample.go");
+    let definitions = find_definitions(&file_path, "DisplayName");
+
+    assert!(!definitions.is_empty(), "Should find DisplayName method");
+    assert_eq!(definitions[0].0, "DisplayName");
+    assert_eq!(definitions[0].1, "method");
+}
+
+#[test]
+fn test_go_find_const_definition() {
+    let file_path = fixtures_path().join("sample.go");
+    let definitions = find_definitions(&file_path, "MaxUsers");
+
+    assert!(!definitions.is_empty(), "Should find MaxUsers const");
+    assert_eq!(definitions[0].0, "MaxUsers");
+    assert_eq!(definitions[0].1, "const");
+}
+
+#[test]
+fn test_go_find_var_definition() {
+    let file_path = fixtures_path().join("sample.go");
+    let definitions = find_definitions(&file_path, "globalCounter");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find globalCounter variable"
+    );
+    assert_eq!(definitions[0].0, "globalCounter");
+    assert_eq!(definitions[0].1, "variable");
+}
+
+#[test]
+fn test_go_find_type_alias_definition() {
+    let file_path = fixtures_path().join("sample.go");
+    let definitions = find_definitions(&file_path, "UserID");
+
+    assert!(!definitions.is_empty(), "Should find UserID type alias");
+    assert_eq!(definitions[0].0, "UserID");
+    assert_eq!(definitions[0].1, "type_alias");
+}
+
+#[test]
+fn test_go_find_usages() {
+    let file_path = fixtures_path().join("sample.go");
+    let count = count_usages(&file_path, "User");
+
+    assert!(count > 0, "Should find 'User' usages in Go file");
+}
+
+#[test]
+fn test_go_find_todo_comments() {
+    let file_path = fixtures_path().join("sample.go");
+
+    let matches = find_comments_in_file(&file_path, "TODO").expect("Failed to find comments");
+
+    assert!(!matches.is_empty(), "Should find TODO comments in Go file");
+}
+
+#[test]
+fn test_go_generic_parser_handles_go_files() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.go");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let result = parser.parse_with_language(&file_path, &source_code);
+
+    assert!(result.is_ok(), "GenericParser should handle .go files");
+    let (tree, lang) = result.unwrap();
+    assert!(
+        tree.root_node().child_count() > 0,
+        "Should produce valid AST with children"
+    );
+    assert_eq!(lang.name(), "Go", "Should use Go language support");
 }

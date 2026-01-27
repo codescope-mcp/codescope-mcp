@@ -14,7 +14,7 @@ pub enum LanguageId {
     Css,
     Python,
     Rust,
-    // Future: Go, etc.
+    Go,
 }
 
 impl std::fmt::Display for LanguageId {
@@ -29,6 +29,7 @@ impl std::fmt::Display for LanguageId {
             LanguageId::Css => write!(f, "Css"),
             LanguageId::Python => write!(f, "Python"),
             LanguageId::Rust => write!(f, "Rust"),
+            LanguageId::Go => write!(f, "Go"),
         }
     }
 }
