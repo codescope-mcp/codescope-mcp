@@ -1,0 +1,54 @@
+use tree_sitter::{Language, Query};
+
+use crate::symbol::types::SymbolKind;
+
+/// Unique identifier for a language
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LanguageId {
+    TypeScript,
+    TypeScriptReact,
+    // Future: Python, Rust, Go, etc.
+}
+
+impl std::fmt::Display for LanguageId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LanguageId::TypeScript => write!(f, "TypeScript"),
+            LanguageId::TypeScriptReact => write!(f, "TypeScriptReact"),
+        }
+    }
+}
+
+/// Mapping from tree-sitter capture name to SymbolKind
+#[derive(Debug, Clone)]
+pub struct SymbolKindMapping {
+    pub capture_name: &'static str,
+    pub kind: SymbolKind,
+}
+
+/// Trait for language support implementations
+///
+/// Each language (TypeScript, Python, Rust, etc.) implements this trait
+/// to provide language-specific parsing capabilities.
+pub trait LanguageSupport: Send + Sync {
+    /// Get the unique identifier for this language
+    fn id(&self) -> LanguageId;
+
+    /// Get the display name of this language
+    fn name(&self) -> &'static str;
+
+    /// Get the file extensions supported by this language (e.g., ["ts", "tsx"])
+    fn file_extensions(&self) -> &[&'static str];
+
+    /// Get the tree-sitter Language grammar
+    fn tree_sitter_language(&self) -> &Language;
+
+    /// Get the query for finding symbol definitions
+    fn definitions_query(&self) -> &Query;
+
+    /// Get the query for finding symbol usages
+    fn usages_query(&self) -> &Query;
+
+    /// Get the mappings from capture names to symbol kinds
+    fn definition_mappings(&self) -> &[SymbolKindMapping];
+}
