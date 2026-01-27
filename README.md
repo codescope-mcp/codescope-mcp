@@ -1,6 +1,6 @@
 # CodeScope MCP
 
-An MCP (Model Context Protocol) server that provides symbol analysis and code navigation for TypeScript, TSX, and Markdown projects.
+An MCP (Model Context Protocol) server that provides symbol analysis and code navigation for TypeScript, JavaScript, Python, Rust, HTML, CSS, and Markdown projects.
 
 ## Features
 
@@ -18,7 +18,13 @@ An MCP (Model Context Protocol) server that provides symbol analysis and code na
 |----------|------------|--------------|
 | TypeScript | `.ts` | Functions, Classes, Methods, Constructors, Interfaces, Enums, Variables, Arrow Functions, Type Aliases |
 | TypeScript React | `.tsx` | Same as TypeScript |
-| Markdown | `.md`, `.mdc` | Headings (H1-H6), Code Blocks (with language), Link References |
+| JavaScript | `.js`, `.mjs`, `.cjs` | Functions, Classes, Methods, Constructors, Variables, Arrow Functions |
+| JavaScript React | `.jsx` | Same as JavaScript |
+| Python | `.py`, `.pyi` | Functions, Classes, Methods, Constructors (__init__), Variables |
+| Rust | `.rs` | Functions, Structs, Enums, Traits, Impls, Methods, Type Aliases, Modules, Consts, Statics, Macros |
+| HTML | `.html`, `.htm` | Elements, IDs, Classes |
+| CSS | `.css` | Class Selectors, ID Selectors, Variables, Keyframes |
+| Markdown | `.md`, `.mdc` | Headings (H1-H6), Code Blocks, Link References |
 
 ## Installation
 
@@ -99,6 +105,12 @@ All tools support the optional `language` parameter:
 
 - `"typescript"` or `"ts"` - TypeScript files only
 - `"typescriptreact"` or `"tsx"` - TSX files only
+- `"javascript"` or `"js"` - JavaScript files only
+- `"javascriptreact"` or `"jsx"` - JSX files only
+- `"python"` or `"py"` - Python files only
+- `"rust"` or `"rs"` - Rust files only
+- `"html"` - HTML files only
+- `"css"` - CSS files only
 - `"markdown"` or `"md"` - Markdown files only
 - `null` or omitted - All supported languages
 
