@@ -4,7 +4,7 @@ package com.example;
 import java.util.List;
 import java.util.ArrayList;
 
-// MaxUsers is the maximum number of users allowed
+// User represents a user in the system
 public class User {
     private int id;
     private String name;
@@ -72,6 +72,7 @@ class ValidationException extends Exception {
 
 // User service class
 class UserService {
+    // Maximum number of users allowed
     private static final int MAX_USERS = 1000;
     private List<User> users;
 
