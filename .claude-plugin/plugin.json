@@ -1,9 +1,10 @@
 {
   "name": "codescope",
   "description": "TypeScript/TSX symbol analysis and code navigation MCP server",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "author": {
     "name": "t0k0sh1"
   },
-  "mcpServers": "./.mcp.json"
+  "mcpServers": "./.mcp.json",
+  "skills": "./skills/"
 }
