@@ -2,6 +2,13 @@
 name = "codescope-mcp"
 version = "0.1.10"
 edition = "2021"
+authors = ["t0k0sh1"]
+description = "A Model Context Protocol (MCP) server that provides code analysis tools using tree-sitter"
+license = "MIT"
+repository = "https://github.com/t0k0sh1/codescope-mcp"
+readme = "README.md"
+keywords = ["mcp", "tree-sitter", "code-analysis", "lsp", "ast"]
+categories = ["development-tools", "parsing"]
 
 [dependencies]
 # MCP protocol (official Rust SDK)
