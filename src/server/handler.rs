@@ -43,12 +43,10 @@ impl CodeScopeServer {
     /// a programming error caught during development/testing rather than a
     /// runtime failure.
     pub fn new() -> Self {
-        let registry = Arc::new(
-            LanguageRegistry::new().expect(
-                "Failed to create language registry: embedded queries are malformed. \
-                This is a programming error that should be caught during development."
-            ),
-        );
+        let registry = Arc::new(LanguageRegistry::new().expect(
+            "Failed to create language registry: embedded queries are malformed. \
+                This is a programming error that should be caught during development.",
+        ));
 
         Self {
             workspace_root: Arc::new(RwLock::new(None)),
@@ -94,16 +92,17 @@ impl CodeScopeServer {
     }
 
     /// Create a file pipeline with the given excludes
-    async fn create_pipeline(&self, exclude_dirs: Option<Vec<String>>) -> Result<FilePipeline, McpError> {
+    async fn create_pipeline(
+        &self,
+        exclude_dirs: Option<Vec<String>>,
+    ) -> Result<FilePipeline, McpError> {
         let workspace_root = self.get_workspace_root().await?;
         let config = self.config.read().await.clone();
 
-        Ok(FilePipeline::new(
-            self.registry.clone(),
-            workspace_root,
-            config,
+        Ok(
+            FilePipeline::new(self.registry.clone(), workspace_root, config)
+                .with_excludes(exclude_dirs),
         )
-        .with_excludes(exclude_dirs))
     }
 
     /// Helper to serialize results to JSON
@@ -114,7 +113,9 @@ impl CodeScopeServer {
         Ok(CallToolResult::success(vec![Content::text(json)]))
     }
 
-    #[tool(description = "Find symbol definitions in the TypeScript/TSX codebase. Returns file path, line numbers, and source code for each definition found. Set include_docs=true to get JSDoc/comments.")]
+    #[tool(
+        description = "Find symbol definitions in the TypeScript/TSX codebase. Returns file path, line numbers, and source code for each definition found. Set include_docs=true to get JSDoc/comments."
+    )]
     async fn symbol_definition(
         &self,
         Parameters(DefinitionParams {
@@ -133,7 +134,9 @@ impl CodeScopeServer {
         Self::serialize_result(&results)
     }
 
-    #[tool(description = "Find all usages of a symbol in the TypeScript/TSX codebase. Returns file path, line, column, and usage_kind. Set include_contexts=true for context info.")]
+    #[tool(
+        description = "Find all usages of a symbol in the TypeScript/TSX codebase. Returns file path, line, column, and usage_kind. Set include_contexts=true for context info."
+    )]
     async fn symbol_usages(
         &self,
         Parameters(UsagesParams {
@@ -146,7 +149,11 @@ impl CodeScopeServer {
         let collector = UsageCollector {
             symbol,
             include_imports: true,
-            max_contexts: if include_contexts.unwrap_or(false) { 2 } else { 0 },
+            max_contexts: if include_contexts.unwrap_or(false) {
+                2
+            } else {
+                0
+            },
             object_filter: None,
         };
 
@@ -154,7 +161,9 @@ impl CodeScopeServer {
         Self::serialize_result(&results)
     }
 
-    #[tool(description = "Find method/function calls. Use for patterns like Date.now() or array.map(). Specify object_name to filter by object (e.g., object_name='Date' for Date.now() only).")]
+    #[tool(
+        description = "Find method/function calls. Use for patterns like Date.now() or array.map(). Specify object_name to filter by object (e.g., object_name='Date' for Date.now() only)."
+    )]
     async fn find_method_calls(
         &self,
         Parameters(MethodCallsParams {
@@ -173,10 +182,15 @@ impl CodeScopeServer {
         Self::serialize_result(&results)
     }
 
-    #[tool(description = "Find import statements for a symbol. Use to understand module dependencies and where a symbol is imported from.")]
+    #[tool(
+        description = "Find import statements for a symbol. Use to understand module dependencies and where a symbol is imported from."
+    )]
     async fn find_imports(
         &self,
-        Parameters(ImportsParams { symbol, exclude_dirs }): Parameters<ImportsParams>,
+        Parameters(ImportsParams {
+            symbol,
+            exclude_dirs,
+        }): Parameters<ImportsParams>,
     ) -> Result<CallToolResult, McpError> {
         let pipeline = self.create_pipeline(exclude_dirs).await?;
         let collector = ImportCollector { symbol };
@@ -185,7 +199,9 @@ impl CodeScopeServer {
         Self::serialize_result(&results)
     }
 
-    #[tool(description = "Search for text within comments in TypeScript/TSX files. Use to find TODOs, FIXMEs, or any text in comments.")]
+    #[tool(
+        description = "Search for text within comments in TypeScript/TSX files. Use to find TODOs, FIXMEs, or any text in comments."
+    )]
     async fn find_in_comments(
         &self,
         Parameters(CommentSearchParams { text, exclude_dirs }): Parameters<CommentSearchParams>,
@@ -197,7 +213,9 @@ impl CodeScopeServer {
         Self::serialize_result(&results)
     }
 
-    #[tool(description = "Get code at a specific file location. Use after find_in_comments or symbol_usages to see the actual code around a specific line.")]
+    #[tool(
+        description = "Get code at a specific file location. Use after find_in_comments or symbol_usages to see the actual code around a specific line."
+    )]
     async fn get_code_at_location(
         &self,
         Parameters(CodeAtLocationParams {

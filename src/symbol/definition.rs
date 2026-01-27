@@ -33,12 +33,7 @@ pub fn find_definitions_in_file(
 
             match capture_name.as_ref() {
                 "name" => {
-                    name = Some(
-                        capture
-                            .node
-                            .utf8_text(source_code.as_bytes())
-                            .unwrap_or(""),
-                    );
+                    name = Some(capture.node.utf8_text(source_code.as_bytes()).unwrap_or(""));
                 }
                 "definition.function" => {
                     definition_node = Some(capture.node);

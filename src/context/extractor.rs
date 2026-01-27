@@ -43,9 +43,7 @@ fn node_to_context(node: tree_sitter::Node, source_code: &str) -> Option<UsageCo
     // Check for constructor
     let kind = if node.kind() == "method_definition" {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node
-                .utf8_text(source_code.as_bytes())
-                .unwrap_or("");
+            let name = name_node.utf8_text(source_code.as_bytes()).unwrap_or("");
             if name == "constructor" {
                 ContextKind::Constructor
             } else {
@@ -73,7 +71,9 @@ fn node_to_context(node: tree_sitter::Node, source_code: &str) -> Option<UsageCo
 /// Extract the name from a context node
 fn extract_context_name(node: tree_sitter::Node, source_code: &str) -> Option<String> {
     let name_node = match node.kind() {
-        "function_declaration" | "class_declaration" | "interface_declaration"
+        "function_declaration"
+        | "class_declaration"
+        | "interface_declaration"
         | "enum_declaration" => node.child_by_field_name("name"),
         "method_definition" => node.child_by_field_name("name"),
         "arrow_function" => {

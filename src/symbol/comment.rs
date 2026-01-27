@@ -5,10 +5,7 @@ use anyhow::Result;
 use crate::symbol::types::{CodeSnippet, CommentMatch, CommentType};
 
 /// Find comments containing the specified text in a file
-pub fn find_comments_in_file(
-    file_path: &Path,
-    search_text: &str,
-) -> Result<Vec<CommentMatch>> {
+pub fn find_comments_in_file(file_path: &Path, search_text: &str) -> Result<Vec<CommentMatch>> {
     let source = std::fs::read_to_string(file_path)?;
     let file_path_str = file_path.to_string_lossy().to_string();
 
@@ -95,7 +92,8 @@ pub fn find_comments_in_file(
                     let after_start = &remaining[block_start + 2..];
                     if let Some(end_offset) = after_start.find("*/") {
                         // Block comment ends on this line
-                        let comment_content = remaining[block_start..block_start + 2 + end_offset + 2].to_string();
+                        let comment_content =
+                            remaining[block_start..block_start + 2 + end_offset + 2].to_string();
                         if comment_content.contains(search_text) {
                             matches.push(CommentMatch {
                                 file_path: file_path_str.clone(),
@@ -152,7 +150,7 @@ pub fn find_comments_in_file(
 /// Get code at a specific location with context lines before and after
 pub fn get_code_at_location(
     file_path: &Path,
-    line: usize,           // 1-indexed
+    line: usize, // 1-indexed
     context_before: usize,
     context_after: usize,
 ) -> Result<CodeSnippet> {

@@ -78,8 +78,8 @@ impl TypeScriptReactLanguage {
 
         let definitions_query = Query::new(&language, definitions_query_src)
             .context("Failed to parse TSX definitions query")?;
-        let usages_query = Query::new(&language, usages_query_src)
-            .context("Failed to parse TSX usages query")?;
+        let usages_query =
+            Query::new(&language, usages_query_src).context("Failed to parse TSX usages query")?;
 
         Ok(Self {
             language,

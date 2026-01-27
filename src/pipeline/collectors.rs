@@ -45,12 +45,7 @@ impl ResultCollector for DefinitionCollector {
                 let capture_name = &query.capture_names()[capture.index as usize];
 
                 if *capture_name == "name" {
-                    name = Some(
-                        capture
-                            .node
-                            .utf8_text(source_code.as_bytes())
-                            .unwrap_or(""),
-                    );
+                    name = Some(capture.node.utf8_text(source_code.as_bytes()).unwrap_or(""));
                 } else {
                     // Check mappings for definition types
                     for mapping in mappings {
@@ -264,7 +259,10 @@ fn is_in_import_statement(node: tree_sitter::Node) -> bool {
     false
 }
 
-fn extract_member_access_info(node: tree_sitter::Node, source: &str) -> (UsageKind, Option<String>) {
+fn extract_member_access_info(
+    node: tree_sitter::Node,
+    source: &str,
+) -> (UsageKind, Option<String>) {
     if let Some(parent) = node.parent() {
         match parent.kind() {
             "member_expression" => {
@@ -278,7 +276,9 @@ fn extract_member_access_info(node: tree_sitter::Node, source: &str) -> (UsageKi
 
                             if let Some(grandparent) = parent.parent() {
                                 if grandparent.kind() == "call_expression" {
-                                    if let Some(func_node) = grandparent.child_by_field_name("function") {
+                                    if let Some(func_node) =
+                                        grandparent.child_by_field_name("function")
+                                    {
                                         if func_node.id() == parent.id() {
                                             return (UsageKind::MethodCall, object_name);
                                         }

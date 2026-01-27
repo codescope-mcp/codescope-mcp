@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use codescope_mcp::parser::typescript::TypeScriptParser;
 use codescope_mcp::symbol::comment::{find_comments_in_file, get_code_at_location};
 use codescope_mcp::symbol::definition::find_definitions_in_file;
-use codescope_mcp::symbol::usage::find_usages_in_file;
 use codescope_mcp::symbol::types::{CommentType, UsageKind};
+use codescope_mcp::symbol::usage::find_usages_in_file;
 
 fn fixtures_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -17,8 +17,8 @@ fn test_find_interface_definition() {
     let mut parser = TypeScriptParser::new().expect("Failed to create parser");
     let file_path = fixtures_path().join("sample.ts");
 
-    let definitions =
-        find_definitions_in_file(&mut parser, &file_path, "User", false).expect("Failed to find definitions");
+    let definitions = find_definitions_in_file(&mut parser, &file_path, "User", false)
+        .expect("Failed to find definitions");
 
     assert!(!definitions.is_empty(), "Should find User interface");
     let user_def = &definitions[0];
@@ -31,8 +31,8 @@ fn test_find_class_definition() {
     let mut parser = TypeScriptParser::new().expect("Failed to create parser");
     let file_path = fixtures_path().join("sample.ts");
 
-    let definitions =
-        find_definitions_in_file(&mut parser, &file_path, "UserService", false).expect("Failed to find definitions");
+    let definitions = find_definitions_in_file(&mut parser, &file_path, "UserService", false)
+        .expect("Failed to find definitions");
 
     assert!(!definitions.is_empty(), "Should find UserService class");
     let class_def = &definitions[0];
@@ -45,8 +45,8 @@ fn test_find_function_definition() {
     let mut parser = TypeScriptParser::new().expect("Failed to create parser");
     let file_path = fixtures_path().join("sample.ts");
 
-    let definitions =
-        find_definitions_in_file(&mut parser, &file_path, "processUser", false).expect("Failed to find definitions");
+    let definitions = find_definitions_in_file(&mut parser, &file_path, "processUser", false)
+        .expect("Failed to find definitions");
 
     assert!(!definitions.is_empty(), "Should find processUser function");
     let func_def = &definitions[0];
@@ -59,10 +59,13 @@ fn test_find_arrow_function_definition() {
     let mut parser = TypeScriptParser::new().expect("Failed to create parser");
     let file_path = fixtures_path().join("sample.ts");
 
-    let definitions =
-        find_definitions_in_file(&mut parser, &file_path, "createUser", false).expect("Failed to find definitions");
+    let definitions = find_definitions_in_file(&mut parser, &file_path, "createUser", false)
+        .expect("Failed to find definitions");
 
-    assert!(!definitions.is_empty(), "Should find createUser arrow function");
+    assert!(
+        !definitions.is_empty(),
+        "Should find createUser arrow function"
+    );
     let arrow_def = &definitions[0];
     assert_eq!(arrow_def.name, "createUser");
     // Could be ArrowFunction or Variable depending on query
@@ -73,8 +76,8 @@ fn test_find_usages() {
     let mut parser = TypeScriptParser::new().expect("Failed to create parser");
     let file_path = fixtures_path().join("sample.ts");
 
-    let usages =
-        find_usages_in_file(&mut parser, &file_path, "User", false, 3, None).expect("Failed to find usages");
+    let usages = find_usages_in_file(&mut parser, &file_path, "User", false, 3, None)
+        .expect("Failed to find usages");
 
     // User should be used in multiple places
     assert!(!usages.is_empty(), "Should find User usages");
@@ -86,10 +89,11 @@ fn test_find_usages_with_imports() {
     let file_path = fixtures_path().join("sample.ts");
 
     let usages_without_imports =
-        find_usages_in_file(&mut parser, &file_path, "User", false, 3, None).expect("Failed to find usages");
+        find_usages_in_file(&mut parser, &file_path, "User", false, 3, None)
+            .expect("Failed to find usages");
 
-    let usages_with_imports =
-        find_usages_in_file(&mut parser, &file_path, "User", true, 3, None).expect("Failed to find usages");
+    let usages_with_imports = find_usages_in_file(&mut parser, &file_path, "User", true, 3, None)
+        .expect("Failed to find usages");
 
     // With imports should be >= without imports
     assert!(
@@ -104,8 +108,8 @@ fn test_no_duplicate_usages() {
     let mut parser = TypeScriptParser::new().expect("Failed to create parser");
     let file_path = fixtures_path().join("sample.ts");
 
-    let usages =
-        find_usages_in_file(&mut parser, &file_path, "User", true, 3, None).expect("Failed to find usages");
+    let usages = find_usages_in_file(&mut parser, &file_path, "User", true, 3, None)
+        .expect("Failed to find usages");
 
     // Check for duplicates by (line, column)
     let mut seen = std::collections::HashSet::new();
@@ -127,15 +131,23 @@ fn test_usage_kind_method_call() {
     let file_path = fixtures_path().join("sample.ts");
 
     // console.log is a method call
-    let usages =
-        find_usages_in_file(&mut parser, &file_path, "log", false, 3, None).expect("Failed to find usages");
+    let usages = find_usages_in_file(&mut parser, &file_path, "log", false, 3, None)
+        .expect("Failed to find usages");
 
     assert!(!usages.is_empty(), "Should find log usages");
 
     // All log usages should be method calls with object_name "console"
     for usage in &usages {
-        assert_eq!(usage.usage_kind, UsageKind::MethodCall, "log should be a method call");
-        assert_eq!(usage.object_name.as_deref(), Some("console"), "log should be called on console");
+        assert_eq!(
+            usage.usage_kind,
+            UsageKind::MethodCall,
+            "log should be a method call"
+        );
+        assert_eq!(
+            usage.object_name.as_deref(),
+            Some("console"),
+            "log should be called on console"
+        );
     }
 }
 
@@ -144,11 +156,12 @@ fn test_usage_kind_type_reference() {
     let mut parser = TypeScriptParser::new().expect("Failed to create parser");
     let file_path = fixtures_path().join("sample.ts");
 
-    let usages =
-        find_usages_in_file(&mut parser, &file_path, "User", false, 3, None).expect("Failed to find usages");
+    let usages = find_usages_in_file(&mut parser, &file_path, "User", false, 3, None)
+        .expect("Failed to find usages");
 
     // User is used as a type annotation in several places
-    let type_refs: Vec<_> = usages.iter()
+    let type_refs: Vec<_> = usages
+        .iter()
         .filter(|u| u.usage_kind == UsageKind::TypeReference)
         .collect();
 
@@ -162,15 +175,21 @@ fn test_method_call_with_object_name() {
     let file_path = fixtures_path().join("semantic_test.ts");
 
     // Test Date.now() detection
-    let usages =
-        find_usages_in_file(&mut parser, &file_path, "now", false, 3, None).expect("Failed to find usages");
+    let usages = find_usages_in_file(&mut parser, &file_path, "now", false, 3, None)
+        .expect("Failed to find usages");
 
-    let date_now: Vec<_> = usages.iter()
+    let date_now: Vec<_> = usages
+        .iter()
         .filter(|u| u.object_name.as_deref() == Some("Date"))
         .collect();
 
     assert!(!date_now.is_empty(), "Should find Date.now() calls");
-    assert!(date_now.iter().all(|u| u.usage_kind == UsageKind::MethodCall), "Date.now() should be a method call");
+    assert!(
+        date_now
+            .iter()
+            .all(|u| u.usage_kind == UsageKind::MethodCall),
+        "Date.now() should be a method call"
+    );
 }
 
 // Phase 3: Test object filter
@@ -180,12 +199,12 @@ fn test_object_filter() {
     let file_path = fixtures_path().join("semantic_test.ts");
 
     // Get all 'now' usages
-    let all_usages =
-        find_usages_in_file(&mut parser, &file_path, "now", false, 3, None).expect("Failed to find usages");
+    let all_usages = find_usages_in_file(&mut parser, &file_path, "now", false, 3, None)
+        .expect("Failed to find usages");
 
     // Get only Date.now() usages
-    let date_usages =
-        find_usages_in_file(&mut parser, &file_path, "now", false, 3, Some("Date")).expect("Failed to find usages");
+    let date_usages = find_usages_in_file(&mut parser, &file_path, "now", false, 3, Some("Date"))
+        .expect("Failed to find usages");
 
     // Date filter should return subset
     assert!(
@@ -210,7 +229,8 @@ fn test_object_filter_excludes_different_objects() {
 
     // Get only chronia.now() usages
     let chronia_usages =
-        find_usages_in_file(&mut parser, &file_path, "now", false, 3, Some("chronia")).expect("Failed to find usages");
+        find_usages_in_file(&mut parser, &file_path, "now", false, 3, Some("chronia"))
+            .expect("Failed to find usages");
 
     // All filtered results should have object_name "chronia"
     for usage in &chronia_usages {
@@ -270,7 +290,10 @@ fn test_find_method_calls_behavior() {
         .filter(|u| u.usage_kind == UsageKind::MethodCall)
         .collect();
 
-    assert!(!method_calls.is_empty(), "Should find Date.now() method calls");
+    assert!(
+        !method_calls.is_empty(),
+        "Should find Date.now() method calls"
+    );
 
     // All results should be MethodCall with object_name "Date"
     for usage in &method_calls {
@@ -319,7 +342,10 @@ fn test_symbol_usages_no_contexts() {
 
     // All results should have empty contexts
     for usage in &usages {
-        assert!(usage.contexts.is_empty(), "contexts should be empty when include_contexts=false");
+        assert!(
+            usage.contexts.is_empty(),
+            "contexts should be empty when include_contexts=false"
+        );
     }
 }
 
@@ -338,11 +364,17 @@ fn test_symbol_usages_with_contexts() {
 
     // At least some results should have contexts (depending on the usage location)
     let has_contexts = usages.iter().any(|u| !u.contexts.is_empty());
-    assert!(has_contexts, "At least some usages should have contexts when include_contexts=true");
+    assert!(
+        has_contexts,
+        "At least some usages should have contexts when include_contexts=true"
+    );
 
     // All contexts should have at most 2 entries
     for usage in &usages {
-        assert!(usage.contexts.len() <= 2, "contexts should have at most 2 entries");
+        assert!(
+            usage.contexts.len() <= 2,
+            "contexts should have at most 2 entries"
+        );
     }
 }
 
@@ -362,7 +394,10 @@ fn test_contexts_serialization() {
     let json = serde_json::to_string_pretty(&usages).expect("Failed to serialize");
 
     // "contexts" should NOT appear in the JSON when empty (skip_serializing_if)
-    assert!(!json.contains("\"contexts\""), "JSON should not contain 'contexts' when empty");
+    assert!(
+        !json.contains("\"contexts\""),
+        "JSON should not contain 'contexts' when empty"
+    );
 }
 
 // Test: contexts serialization with contexts present
@@ -381,7 +416,10 @@ fn test_contexts_serialization_with_contexts() {
     let json = serde_json::to_string_pretty(&usages).expect("Failed to serialize");
 
     // "contexts" should appear in the JSON when present
-    assert!(json.contains("\"contexts\""), "JSON should contain 'contexts' when present");
+    assert!(
+        json.contains("\"contexts\""),
+        "JSON should contain 'contexts' when present"
+    );
 }
 
 // ======================================
@@ -415,10 +453,15 @@ fn test_comment_types() {
     let matches = find_comments_in_file(&file_path, "TODO").expect("Failed to find comments");
 
     // Should have both SingleLine and Block comments
-    let has_single_line = matches.iter().any(|m| m.comment_type == CommentType::SingleLine);
+    let has_single_line = matches
+        .iter()
+        .any(|m| m.comment_type == CommentType::SingleLine);
     let has_block = matches.iter().any(|m| m.comment_type == CommentType::Block);
 
-    assert!(has_single_line || has_block, "Should find at least one comment type");
+    assert!(
+        has_single_line || has_block,
+        "Should find at least one comment type"
+    );
 }
 
 #[test]
@@ -436,7 +479,10 @@ fn test_definition_with_docs() {
     // Should have JSDoc
     assert!(product_def.docs.is_some(), "Product should have docs");
     let docs = product_def.docs.as_ref().unwrap();
-    assert!(docs.contains("Represents a product"), "Docs should contain description");
+    assert!(
+        docs.contains("Represents a product"),
+        "Docs should contain description"
+    );
 }
 
 #[test]
@@ -470,7 +516,10 @@ fn test_definition_without_docs() {
     let product_def = &definitions[0];
 
     // Should NOT have docs
-    assert!(product_def.docs.is_none(), "Product should not have docs when include_docs=false");
+    assert!(
+        product_def.docs.is_none(),
+        "Product should not have docs when include_docs=false"
+    );
 }
 
 #[test]
@@ -482,19 +531,27 @@ fn test_definition_docs_serialization() {
     let definitions_no_docs = find_definitions_in_file(&mut parser, &file_path, "Product", false)
         .expect("Failed to find definitions");
 
-    let json_no_docs = serde_json::to_string_pretty(&definitions_no_docs).expect("Failed to serialize");
+    let json_no_docs =
+        serde_json::to_string_pretty(&definitions_no_docs).expect("Failed to serialize");
 
     // "docs" should NOT appear when None (skip_serializing_if)
-    assert!(!json_no_docs.contains("\"docs\""), "JSON should not contain 'docs' when None");
+    assert!(
+        !json_no_docs.contains("\"docs\""),
+        "JSON should not contain 'docs' when None"
+    );
 
     // Get definitions with docs
     let definitions_with_docs = find_definitions_in_file(&mut parser, &file_path, "Product", true)
         .expect("Failed to find definitions");
 
-    let json_with_docs = serde_json::to_string_pretty(&definitions_with_docs).expect("Failed to serialize");
+    let json_with_docs =
+        serde_json::to_string_pretty(&definitions_with_docs).expect("Failed to serialize");
 
     // "docs" should appear when Some
-    assert!(json_with_docs.contains("\"docs\""), "JSON should contain 'docs' when present");
+    assert!(
+        json_with_docs.contains("\"docs\""),
+        "JSON should contain 'docs' when present"
+    );
 }
 
 #[test]
@@ -512,7 +569,10 @@ fn test_single_line_comment_docs() {
     // Should have single-line comment docs
     assert!(func_def.docs.is_some(), "formatPrice should have docs");
     let docs = func_def.docs.as_ref().unwrap();
-    assert!(docs.contains("Helper function") || docs.contains("formatted price"), "Docs should contain comment text");
+    assert!(
+        docs.contains("Helper function") || docs.contains("formatted price"),
+        "Docs should contain comment text"
+    );
 }
 
 // ======================================
@@ -527,7 +587,7 @@ fn test_get_code_at_location_basic() {
 
     assert_eq!(snippet.file_path, file_path.to_string_lossy());
     assert_eq!(snippet.start_line, 3); // 5 - 2 = 3
-    assert_eq!(snippet.end_line, 7);   // 5 + 2 = 7
+    assert_eq!(snippet.end_line, 7); // 5 + 2 = 7
     assert!(!snippet.code.is_empty(), "Code should not be empty");
 }
 
@@ -539,7 +599,7 @@ fn test_get_code_at_location_at_start() {
     let snippet = get_code_at_location(&file_path, 1, 5, 2).expect("Failed to get code");
 
     assert_eq!(snippet.start_line, 1); // Clamped to 1
-    assert_eq!(snippet.end_line, 3);   // 1 + 2 = 3
+    assert_eq!(snippet.end_line, 3); // 1 + 2 = 3
 }
 
 #[test]
@@ -551,7 +611,8 @@ fn test_get_code_at_location_at_end() {
     let total_lines = source.lines().count();
 
     // Request past end of file should clamp
-    let snippet = get_code_at_location(&file_path, total_lines, 2, 100).expect("Failed to get code");
+    let snippet =
+        get_code_at_location(&file_path, total_lines, 2, 100).expect("Failed to get code");
 
     assert_eq!(snippet.end_line, total_lines); // Clamped to total lines
 }
@@ -563,8 +624,8 @@ fn test_get_code_at_location_default_context() {
     // Default context (3 lines before and after)
     let snippet = get_code_at_location(&file_path, 10, 3, 3).expect("Failed to get code");
 
-    assert_eq!(snippet.start_line, 7);  // 10 - 3 = 7
-    assert_eq!(snippet.end_line, 13);   // 10 + 3 = 13
+    assert_eq!(snippet.start_line, 7); // 10 - 3 = 7
+    assert_eq!(snippet.end_line, 13); // 10 + 3 = 13
 }
 
 #[test]
@@ -577,9 +638,18 @@ fn test_get_code_at_location_serialization() {
     let json = serde_json::to_string_pretty(&snippet).expect("Failed to serialize");
 
     // Should contain all expected fields
-    assert!(json.contains("\"file_path\""), "JSON should contain file_path");
-    assert!(json.contains("\"start_line\""), "JSON should contain start_line");
-    assert!(json.contains("\"end_line\""), "JSON should contain end_line");
+    assert!(
+        json.contains("\"file_path\""),
+        "JSON should contain file_path"
+    );
+    assert!(
+        json.contains("\"start_line\""),
+        "JSON should contain start_line"
+    );
+    assert!(
+        json.contains("\"end_line\""),
+        "JSON should contain end_line"
+    );
     assert!(json.contains("\"code\""), "JSON should contain code");
 }
 
@@ -599,23 +669,34 @@ fn test_qualified_name_simple_identifier() {
     assert!(!usages.is_empty(), "Should find 'now' usages");
 
     // Check that Date.now() has qualified_name "Date.now"
-    let date_now_usages: Vec<_> = usages.iter()
+    let date_now_usages: Vec<_> = usages
+        .iter()
         .filter(|u| u.object_name.as_deref() == Some("Date"))
         .collect();
 
     assert!(!date_now_usages.is_empty(), "Should find Date.now() usages");
     for usage in &date_now_usages {
-        assert_eq!(usage.qualified_name, "Date.now", "qualified_name should be 'Date.now'");
+        assert_eq!(
+            usage.qualified_name, "Date.now",
+            "qualified_name should be 'Date.now'"
+        );
     }
 
     // Check that chronia.now() has qualified_name "chronia.now"
-    let chronia_now_usages: Vec<_> = usages.iter()
+    let chronia_now_usages: Vec<_> = usages
+        .iter()
         .filter(|u| u.object_name.as_deref() == Some("chronia"))
         .collect();
 
-    assert!(!chronia_now_usages.is_empty(), "Should find chronia.now() usages");
+    assert!(
+        !chronia_now_usages.is_empty(),
+        "Should find chronia.now() usages"
+    );
     for usage in &chronia_now_usages {
-        assert_eq!(usage.qualified_name, "chronia.now", "qualified_name should be 'chronia.now'");
+        assert_eq!(
+            usage.qualified_name, "chronia.now",
+            "qualified_name should be 'chronia.now'"
+        );
     }
 }
 
@@ -633,7 +714,10 @@ fn test_qualified_name_without_object() {
     // All usages without object_name should have qualified_name = "User"
     for usage in &usages {
         if usage.object_name.is_none() {
-            assert_eq!(usage.qualified_name, "User", "qualified_name should be 'User' when no object");
+            assert_eq!(
+                usage.qualified_name, "User",
+                "qualified_name should be 'User' when no object"
+            );
         }
     }
 }
@@ -650,9 +734,14 @@ fn test_qualified_name_serialization() {
     let json = serde_json::to_string_pretty(&usages).expect("Failed to serialize");
 
     // Should always contain qualified_name
-    assert!(json.contains("\"qualified_name\""), "JSON should always contain 'qualified_name'");
-    assert!(json.contains("\"Date.now\"") || json.contains("\"chronia.now\""),
-        "JSON should contain qualified names like 'Date.now' or 'chronia.now'");
+    assert!(
+        json.contains("\"qualified_name\""),
+        "JSON should always contain 'qualified_name'"
+    );
+    assert!(
+        json.contains("\"Date.now\"") || json.contains("\"chronia.now\""),
+        "JSON should contain qualified names like 'Date.now' or 'chronia.now'"
+    );
 }
 
 #[test]
@@ -665,8 +754,14 @@ fn test_qualified_name_distinguishes_same_method() {
         .expect("Failed to find usages");
 
     // Group by qualified_name
-    let date_now_count = usages.iter().filter(|u| u.qualified_name == "Date.now").count();
-    let chronia_now_count = usages.iter().filter(|u| u.qualified_name == "chronia.now").count();
+    let date_now_count = usages
+        .iter()
+        .filter(|u| u.qualified_name == "Date.now")
+        .count();
+    let chronia_now_count = usages
+        .iter()
+        .filter(|u| u.qualified_name == "chronia.now")
+        .count();
 
     // Both should have usages
     assert!(date_now_count > 0, "Should have Date.now usages");
@@ -677,6 +772,9 @@ fn test_qualified_name_distinguishes_same_method() {
 
     // The qualified_name allows clear distinction
     for usage in &usages {
-        println!("Line {}: qualified_name={}", usage.line, usage.qualified_name);
+        println!(
+            "Line {}: qualified_name={}",
+            usage.line, usage.qualified_name
+        );
     }
 }
