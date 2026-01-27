@@ -8,6 +8,7 @@ use super::css::CssLanguage;
 use super::html::HtmlLanguage;
 use super::javascript::{JavaScriptLanguage, JavaScriptReactLanguage};
 use super::markdown::MarkdownLanguage;
+use super::python::PythonLanguage;
 use super::traits::{LanguageId, LanguageSupport};
 use super::typescript::{TypeScriptLanguage, TypeScriptReactLanguage};
 
@@ -49,6 +50,9 @@ impl LanguageRegistry {
         ))?;
         registry.register(Arc::new(
             CssLanguage::new().context("Failed to create CSS language")?,
+        ))?;
+        registry.register(Arc::new(
+            PythonLanguage::new().context("Failed to create Python language")?,
         ))?;
 
         Ok(registry)
@@ -120,6 +124,7 @@ mod tests {
         assert!(registry.get(LanguageId::Markdown).is_some());
         assert!(registry.get(LanguageId::Html).is_some());
         assert!(registry.get(LanguageId::Css).is_some());
+        assert!(registry.get(LanguageId::Python).is_some());
     }
 
     #[test]
@@ -158,6 +163,12 @@ mod tests {
 
         let css_lang = registry.get_by_extension("css").unwrap();
         assert_eq!(css_lang.id(), LanguageId::Css);
+
+        let py_lang = registry.get_by_extension("py").unwrap();
+        assert_eq!(py_lang.id(), LanguageId::Python);
+
+        let pyi_lang = registry.get_by_extension("pyi").unwrap();
+        assert_eq!(pyi_lang.id(), LanguageId::Python);
     }
 
     #[test]
@@ -185,7 +196,10 @@ mod tests {
         let css_path = PathBuf::from("styles.css");
         assert!(registry.get_for_path(&css_path).is_some());
 
-        let unsupported_path = PathBuf::from("script.py");
+        let py_path = PathBuf::from("script.py");
+        assert!(registry.get_for_path(&py_path).is_some());
+
+        let unsupported_path = PathBuf::from("script.rs");
         assert!(registry.get_for_path(&unsupported_path).is_none());
     }
 
@@ -204,7 +218,8 @@ mod tests {
         assert!(registry.is_supported(Path::new("test.html")));
         assert!(registry.is_supported(Path::new("test.htm")));
         assert!(registry.is_supported(Path::new("test.css")));
-        assert!(!registry.is_supported(Path::new("test.py")));
+        assert!(registry.is_supported(Path::new("test.py")));
+        assert!(registry.is_supported(Path::new("test.pyi")));
         assert!(!registry.is_supported(Path::new("test.rs")));
     }
 }
