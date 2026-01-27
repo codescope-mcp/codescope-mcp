@@ -980,6 +980,360 @@ fn test_find_symbol_at_location_debug() {
 }
 
 // ======================================
+// JavaScript/JSX tests
+// ======================================
+
+/// Helper function to find symbol definitions using GenericParser
+fn find_js_definitions(file_path: &std::path::Path, symbol_name: &str) -> Vec<(String, String)> {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+
+    let source_code = std::fs::read_to_string(file_path).expect("Failed to read file");
+    let (tree, lang) = parser
+        .parse_with_language(file_path, &source_code)
+        .expect("Failed to parse file");
+
+    let query = lang.definitions_query();
+    let mut cursor = tree_sitter::QueryCursor::new();
+
+    use streaming_iterator::StreamingIterator;
+    let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
+
+    // Collect all matches first, then deduplicate preferring more specific types
+    let mut all_results: Vec<(String, String, usize, usize)> = Vec::new(); // (name, kind, start_row, start_col)
+    while let Some(m) = matches.next() {
+        let mut name: Option<String> = None;
+        let mut kind: Option<String> = None;
+        let mut start_row = 0;
+        let mut start_col = 0;
+
+        for capture in m.captures {
+            let capture_name = &query.capture_names()[capture.index as usize];
+            if *capture_name == "name" {
+                name = Some(
+                    capture
+                        .node
+                        .utf8_text(source_code.as_bytes())
+                        .unwrap_or("")
+                        .to_string(),
+                );
+                start_row = capture.node.start_position().row;
+                start_col = capture.node.start_position().column;
+            } else if capture_name.starts_with("definition.") {
+                kind = Some(capture_name.replace("definition.", ""));
+            }
+        }
+
+        if let (Some(n), Some(k)) = (name, kind) {
+            if n == symbol_name {
+                all_results.push((n, k, start_row, start_col));
+            }
+        }
+    }
+
+    // Deduplicate: prefer arrow_function over variable at the same location
+    use std::collections::HashMap;
+    let mut deduped: HashMap<(usize, usize), (String, String)> = HashMap::new();
+    for (name, kind, row, col) in all_results {
+        let key = (row, col);
+        if let Some((_, existing_kind)) = deduped.get(&key) {
+            // Prefer arrow_function over variable
+            if existing_kind == "variable" && kind == "arrow_function" {
+                deduped.insert(key, (name, kind));
+            }
+        } else {
+            deduped.insert(key, (name, kind));
+        }
+    }
+
+    deduped.into_values().collect()
+}
+
+/// Helper function to find symbol usages using GenericParser
+fn find_js_usages(file_path: &std::path::Path, symbol_name: &str) -> Vec<String> {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+
+    let source_code = std::fs::read_to_string(file_path).expect("Failed to read file");
+    let (tree, lang) = parser
+        .parse_with_language(file_path, &source_code)
+        .expect("Failed to parse file");
+
+    let query = lang.usages_query();
+    let mut cursor = tree_sitter::QueryCursor::new();
+
+    use streaming_iterator::StreamingIterator;
+    let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
+
+    let mut results = Vec::new();
+    while let Some(m) = matches.next() {
+        for capture in m.captures {
+            let capture_name = &query.capture_names()[capture.index as usize];
+            if *capture_name == "usage" {
+                let usage_text = capture
+                    .node
+                    .utf8_text(source_code.as_bytes())
+                    .unwrap_or("")
+                    .to_string();
+                if usage_text == symbol_name {
+                    results.push(usage_text);
+                }
+            }
+        }
+    }
+
+    results
+}
+
+#[test]
+fn test_js_find_class_definition() {
+    let file_path = fixtures_path().join("sample.js");
+    let definitions = find_js_definitions(&file_path, "UserService");
+
+    assert!(!definitions.is_empty(), "Should find UserService class");
+    assert_eq!(definitions[0].0, "UserService");
+    assert_eq!(definitions[0].1, "class");
+}
+
+#[test]
+fn test_js_find_function_definition() {
+    let file_path = fixtures_path().join("sample.js");
+    let definitions = find_js_definitions(&file_path, "processUser");
+
+    assert!(!definitions.is_empty(), "Should find processUser function");
+    assert_eq!(definitions[0].0, "processUser");
+    assert_eq!(definitions[0].1, "function");
+}
+
+#[test]
+fn test_js_find_arrow_function_definition() {
+    let file_path = fixtures_path().join("sample.js");
+    let definitions = find_js_definitions(&file_path, "createUser");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find createUser arrow function"
+    );
+    assert_eq!(definitions[0].0, "createUser");
+    assert_eq!(
+        definitions[0].1, "arrow_function",
+        "Should be arrow_function kind"
+    );
+}
+
+#[test]
+fn test_js_find_exported_arrow_function() {
+    let file_path = fixtures_path().join("sample.js");
+    let definitions = find_js_definitions(&file_path, "formatName");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find formatName exported arrow function"
+    );
+    assert_eq!(definitions[0].0, "formatName");
+    assert_eq!(
+        definitions[0].1, "arrow_function",
+        "Exported arrow function should be arrow_function kind"
+    );
+}
+
+#[test]
+fn test_js_find_exported_function() {
+    let file_path = fixtures_path().join("sample.js");
+    let definitions = find_js_definitions(&file_path, "validateEmail");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find validateEmail exported function"
+    );
+    assert_eq!(definitions[0].0, "validateEmail");
+    assert_eq!(definitions[0].1, "function");
+}
+
+#[test]
+fn test_js_find_exported_class() {
+    let file_path = fixtures_path().join("sample.js");
+    let definitions = find_js_definitions(&file_path, "Logger");
+
+    assert!(!definitions.is_empty(), "Should find Logger exported class");
+    assert_eq!(definitions[0].0, "Logger");
+    assert_eq!(definitions[0].1, "class");
+}
+
+#[test]
+fn test_js_find_var_variable() {
+    let file_path = fixtures_path().join("sample.js");
+    let definitions = find_js_definitions(&file_path, "globalConfig");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find globalConfig var variable"
+    );
+    assert_eq!(definitions[0].0, "globalConfig");
+    assert_eq!(definitions[0].1, "variable");
+}
+
+#[test]
+fn test_js_find_constructor() {
+    let file_path = fixtures_path().join("sample.js");
+    let definitions = find_js_definitions(&file_path, "constructor");
+
+    assert!(!definitions.is_empty(), "Should find constructors");
+    // Should find constructors for UserService and Logger
+    let constructor_defs: Vec<_> = definitions
+        .iter()
+        .filter(|(_, k)| k == "constructor")
+        .collect();
+    assert!(
+        constructor_defs.len() >= 2,
+        "Should find at least 2 constructors"
+    );
+}
+
+#[test]
+fn test_js_find_method() {
+    let file_path = fixtures_path().join("sample.js");
+    let definitions = find_js_definitions(&file_path, "addUser");
+
+    assert!(!definitions.is_empty(), "Should find addUser method");
+    assert_eq!(definitions[0].0, "addUser");
+    assert_eq!(definitions[0].1, "method");
+}
+
+#[test]
+fn test_js_find_usages() {
+    let file_path = fixtures_path().join("sample.js");
+    let usages = find_js_usages(&file_path, "console");
+
+    assert!(!usages.is_empty(), "Should find console usages");
+}
+
+#[test]
+fn test_js_find_todo_comments() {
+    let file_path = fixtures_path().join("sample.js");
+
+    let matches = find_comments_in_file(&file_path, "TODO").expect("Failed to find comments");
+
+    assert!(!matches.is_empty(), "Should find TODO comments in JS file");
+}
+
+#[test]
+fn test_js_generic_parser_handles_js_files() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.js");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let result = parser.parse_with_language(&file_path, &source_code);
+
+    assert!(result.is_ok(), "GenericParser should handle .js files");
+    let (tree, lang) = result.unwrap();
+    assert!(
+        tree.root_node().child_count() > 0,
+        "Should produce valid AST with children"
+    );
+    assert_eq!(
+        lang.name(),
+        "JavaScript",
+        "Should use JavaScript language support"
+    );
+}
+
+// JSX tests
+
+#[test]
+fn test_jsx_find_class_component() {
+    let file_path = fixtures_path().join("sample.jsx");
+    let definitions = find_js_definitions(&file_path, "UserCard");
+
+    assert!(!definitions.is_empty(), "Should find UserCard class");
+    assert_eq!(definitions[0].0, "UserCard");
+    assert_eq!(definitions[0].1, "class");
+}
+
+#[test]
+fn test_jsx_find_function_component() {
+    let file_path = fixtures_path().join("sample.jsx");
+    let definitions = find_js_definitions(&file_path, "UserProfile");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find UserProfile function component"
+    );
+    assert_eq!(definitions[0].0, "UserProfile");
+    assert_eq!(definitions[0].1, "function");
+}
+
+#[test]
+fn test_jsx_find_arrow_function_component() {
+    let file_path = fixtures_path().join("sample.jsx");
+    let definitions = find_js_definitions(&file_path, "UserList");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find UserList arrow function component"
+    );
+    assert_eq!(definitions[0].0, "UserList");
+    assert_eq!(definitions[0].1, "arrow_function");
+}
+
+#[test]
+fn test_jsx_find_exported_arrow_function_component() {
+    let file_path = fixtures_path().join("sample.jsx");
+    let definitions = find_js_definitions(&file_path, "Avatar");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find Avatar exported arrow function component"
+    );
+    assert_eq!(definitions[0].0, "Avatar");
+    assert_eq!(
+        definitions[0].1, "arrow_function",
+        "Exported arrow function component should be arrow_function kind"
+    );
+}
+
+#[test]
+fn test_jsx_find_method() {
+    let file_path = fixtures_path().join("sample.jsx");
+    let definitions = find_js_definitions(&file_path, "toggleExpand");
+
+    assert!(!definitions.is_empty(), "Should find toggleExpand method");
+    assert_eq!(definitions[0].0, "toggleExpand");
+    assert_eq!(definitions[0].1, "method");
+}
+
+#[test]
+fn test_jsx_generic_parser_handles_jsx_files() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.jsx");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let result = parser.parse_with_language(&file_path, &source_code);
+
+    assert!(result.is_ok(), "GenericParser should handle .jsx files");
+    let (tree, lang) = result.unwrap();
+    assert!(
+        tree.root_node().child_count() > 0,
+        "Should produce valid AST with children"
+    );
+    assert_eq!(
+        lang.name(),
+        "JavaScriptReact",
+        "Should use JavaScriptReact language support"
+    );
+}
+
+#[test]
+fn test_jsx_find_usages() {
+    let file_path = fixtures_path().join("sample.jsx");
+    let usages = find_js_usages(&file_path, "user");
+
+    assert!(!usages.is_empty(), "Should find 'user' usages in JSX file");
+}
+
+// ======================================
 // Markdown tests
 // ======================================
 

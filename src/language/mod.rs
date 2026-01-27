@@ -1,8 +1,10 @@
+mod javascript;
 mod markdown;
 mod registry;
 mod traits;
 mod typescript;
 
+pub use javascript::{JavaScriptLanguage, JavaScriptReactLanguage};
 pub use markdown::MarkdownLanguage;
 pub use registry::LanguageRegistry;
 pub use traits::{LanguageId, LanguageSupport, SymbolKindMapping};

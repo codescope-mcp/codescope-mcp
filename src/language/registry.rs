@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 
+use super::javascript::{JavaScriptLanguage, JavaScriptReactLanguage};
 use super::markdown::MarkdownLanguage;
 use super::traits::{LanguageId, LanguageSupport};
 use super::typescript::{TypeScriptLanguage, TypeScriptReactLanguage};
@@ -31,6 +32,12 @@ impl LanguageRegistry {
         ))?;
         registry.register(Arc::new(
             TypeScriptReactLanguage::new().context("Failed to create TSX language")?,
+        ))?;
+        registry.register(Arc::new(
+            JavaScriptLanguage::new().context("Failed to create JavaScript language")?,
+        ))?;
+        registry.register(Arc::new(
+            JavaScriptReactLanguage::new().context("Failed to create JSX language")?,
         ))?;
         registry.register(Arc::new(
             MarkdownLanguage::new().context("Failed to create Markdown language")?,
@@ -100,6 +107,8 @@ mod tests {
         let registry = LanguageRegistry::new().unwrap();
         assert!(registry.get(LanguageId::TypeScript).is_some());
         assert!(registry.get(LanguageId::TypeScriptReact).is_some());
+        assert!(registry.get(LanguageId::JavaScript).is_some());
+        assert!(registry.get(LanguageId::JavaScriptReact).is_some());
         assert!(registry.get(LanguageId::Markdown).is_some());
     }
 
@@ -112,6 +121,18 @@ mod tests {
 
         let tsx_lang = registry.get_by_extension("tsx").unwrap();
         assert_eq!(tsx_lang.id(), LanguageId::TypeScriptReact);
+
+        let js_lang = registry.get_by_extension("js").unwrap();
+        assert_eq!(js_lang.id(), LanguageId::JavaScript);
+
+        let mjs_lang = registry.get_by_extension("mjs").unwrap();
+        assert_eq!(mjs_lang.id(), LanguageId::JavaScript);
+
+        let cjs_lang = registry.get_by_extension("cjs").unwrap();
+        assert_eq!(cjs_lang.id(), LanguageId::JavaScript);
+
+        let jsx_lang = registry.get_by_extension("jsx").unwrap();
+        assert_eq!(jsx_lang.id(), LanguageId::JavaScriptReact);
 
         let md_lang = registry.get_by_extension("md").unwrap();
         assert_eq!(md_lang.id(), LanguageId::Markdown);
@@ -130,6 +151,12 @@ mod tests {
         let tsx_path = PathBuf::from("src/App.tsx");
         assert!(registry.get_for_path(&tsx_path).is_some());
 
+        let js_path = PathBuf::from("src/index.js");
+        assert!(registry.get_for_path(&js_path).is_some());
+
+        let jsx_path = PathBuf::from("src/App.jsx");
+        assert!(registry.get_for_path(&jsx_path).is_some());
+
         let md_path = PathBuf::from("README.md");
         assert!(registry.get_for_path(&md_path).is_some());
 
@@ -143,6 +170,10 @@ mod tests {
 
         assert!(registry.is_supported(Path::new("test.ts")));
         assert!(registry.is_supported(Path::new("test.tsx")));
+        assert!(registry.is_supported(Path::new("test.js")));
+        assert!(registry.is_supported(Path::new("test.mjs")));
+        assert!(registry.is_supported(Path::new("test.cjs")));
+        assert!(registry.is_supported(Path::new("test.jsx")));
         assert!(registry.is_supported(Path::new("test.md")));
         assert!(registry.is_supported(Path::new("test.mdc")));
         assert!(!registry.is_supported(Path::new("test.py")));
