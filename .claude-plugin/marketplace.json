@@ -5,14 +5,17 @@
   },
   "metadata": {
     "description": "TypeScript/TSX symbol analysis and code navigation tools",
-    "version": "0.1.8"
+    "version": "0.1.9"
   },
   "plugins": [
     {
       "name": "codescope",
-      "source": ".",
+      "source": {
+        "source": "github",
+        "repo": "codescope-mcp/codescope-mcp"
+      },
       "description": "TypeScript/TSX symbol analysis and code navigation MCP server",
-      "version": "0.1.8",
+      "version": "0.1.9",
       "author": {
         "name": "t0k0sh1"
       },
