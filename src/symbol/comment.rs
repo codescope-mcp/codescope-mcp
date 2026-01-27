@@ -147,6 +147,40 @@ pub fn find_comments_in_file(file_path: &Path, search_text: &str) -> Result<Vec<
     Ok(matches)
 }
 
+/// Search for text in Markdown files (full text search)
+///
+/// Since Markdown doesn't have a concept of "comments", this function
+/// performs a full text search and treats all matches as block comments.
+pub fn find_text_in_markdown_file(
+    file_path: &Path,
+    search_text: &str,
+) -> Result<Vec<CommentMatch>> {
+    let source = std::fs::read_to_string(file_path)?;
+    let file_path_str = file_path.to_string_lossy().to_string();
+
+    let mut matches = Vec::new();
+
+    for (line_num, line) in source.lines().enumerate() {
+        let line_1indexed = line_num + 1;
+
+        // Find all occurrences of the search text in this line
+        let mut search_start = 0;
+        while let Some(pos) = line[search_start..].find(search_text) {
+            let column = search_start + pos;
+            matches.push(CommentMatch {
+                file_path: file_path_str.clone(),
+                line: line_1indexed,
+                column,
+                comment_type: CommentType::Block, // Treat as block for Markdown
+                content: line.to_string(),
+            });
+            search_start = column + search_text.len();
+        }
+    }
+
+    Ok(matches)
+}
+
 /// Get code at a specific location with context lines before and after
 pub fn get_code_at_location(
     file_path: &Path,
@@ -294,5 +328,34 @@ function foo() {}"#;
 
         let docs = extract_docs_before_line(source, 1);
         assert!(docs.is_none());
+    }
+
+    #[test]
+    fn test_find_text_in_markdown() {
+        let mut file = NamedTempFile::with_suffix(".md").unwrap();
+        writeln!(file, "# Test Heading").unwrap();
+        writeln!(file).unwrap();
+        writeln!(file, "This is a test document.").unwrap();
+        writeln!(file, "TODO: add more content").unwrap();
+        writeln!(file, "Another TODO item here").unwrap();
+
+        let matches = find_text_in_markdown_file(file.path(), "TODO").unwrap();
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].line, 4);
+        assert_eq!(matches[1].line, 5);
+        // All Markdown matches are treated as Block type
+        assert_eq!(matches[0].comment_type, CommentType::Block);
+    }
+
+    #[test]
+    fn test_find_text_in_markdown_multiple_per_line() {
+        let mut file = NamedTempFile::with_suffix(".md").unwrap();
+        writeln!(file, "test test test").unwrap();
+
+        let matches = find_text_in_markdown_file(file.path(), "test").unwrap();
+        assert_eq!(matches.len(), 3);
+        assert_eq!(matches[0].column, 0);
+        assert_eq!(matches[1].column, 5);
+        assert_eq!(matches[2].column, 10);
     }
 }

@@ -6,7 +6,9 @@ use streaming_iterator::StreamingIterator;
 
 use crate::context::extractor::extract_contexts;
 use crate::parser::GenericParser;
-use crate::symbol::comment::{extract_docs_before_line, find_comments_in_file};
+use crate::symbol::comment::{
+    extract_docs_before_line, find_comments_in_file, find_text_in_markdown_file,
+};
 use crate::symbol::types::{CommentMatch, SymbolDefinition, SymbolKind, SymbolUsage, UsageKind};
 
 /// Trait for collecting results from parsed files
@@ -238,10 +240,20 @@ impl ResultCollector for CommentCollector {
     type Item = CommentMatch;
 
     fn process_file(&self, _parser: &mut GenericParser, path: &Path) -> Result<Vec<Self::Item>> {
-        // Delegate to the existing comprehensive comment search implementation
-        // which properly handles multi-line block comments, state management,
-        // and edge cases that a simple line-by-line search would miss.
-        find_comments_in_file(path, &self.text)
+        // Check if this is a Markdown file
+        let is_markdown = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext == "md" || ext == "mdc")
+            .unwrap_or(false);
+
+        if is_markdown {
+            // For Markdown files, perform full text search since there's no comment syntax
+            find_text_in_markdown_file(path, &self.text)
+        } else {
+            // For TypeScript/TSX files, search within comments only
+            find_comments_in_file(path, &self.text)
+        }
     }
 }
 

@@ -1,40 +1,36 @@
 # CodeScope MCP
 
-TypeScript/TSXプロジェクトのシンボル解析とコードナビゲーションを提供するMCPサーバーです。
+An MCP (Model Context Protocol) server that provides symbol analysis and code navigation for TypeScript, TSX, and Markdown projects.
 
-## 機能
+## Features
 
-- **symbol_definition**: シンボル定義の検索（JSDocコメント付き）
-- **symbol_usages**: シンボルの使用箇所を検索
-- **find_method_calls**: メソッド/関数呼び出しの検索
-- **find_imports**: インポート文の検索
-- **find_in_comments**: コメント内テキスト検索
-- **get_code_at_location**: 指定位置のコード取得
+- **symbol_definition**: Find symbol definitions (with JSDoc/comments support)
+- **symbol_usages**: Find all usages of a symbol
+- **find_method_calls**: Find method/function calls (e.g., `Date.now()`, `array.map()`)
+- **find_imports**: Find import statements for a symbol
+- **find_in_comments**: Search text in comments (TypeScript/TSX) or full text (Markdown)
+- **get_code_at_location**: Get code snippet at a specific file:line
+- **get_symbol_at_location**: Get the enclosing symbol at a specific file:line
 
-## 前提条件
+### Supported Languages
 
-- Rustツールチェーン（cargo, rustc）
+| Language | Extensions | Symbol Types |
+|----------|------------|--------------|
+| TypeScript | `.ts` | Functions, Classes, Methods, Constructors, Interfaces, Enums, Variables, Arrow Functions, Type Aliases |
+| TypeScript React | `.tsx` | Same as TypeScript |
+| Markdown | `.md`, `.mdc` | Headings (H1-H6), Code Blocks (with language), Link References |
 
-## インストール
+## Installation
 
-### MCPサーバーとして使用
+### As a Claude Code Plugin
 
-```bash
-# ビルド
-cargo build --release
-
-# 実行
-cargo run --release
-```
-
-### Claude Code プラグインとして使用
+Install directly from the GitHub repository:
 
 ```bash
-# プラグインとして追加
-claude plugins add /path/to/codescope-mcp
+claude mcp add codescope -- cargo install --git https://github.com/t0k0sh1/codescope-mcp
 ```
 
-追加後、以下のツールが利用可能になります：
+After installation, the following tools will be available:
 
 - `symbol_definition`
 - `symbol_usages`
@@ -42,25 +38,83 @@ claude plugins add /path/to/codescope-mcp
 - `find_imports`
 - `find_in_comments`
 - `get_code_at_location`
+- `get_symbol_at_location`
 
-スキル `/codescope:symbol-analysis` で使用ガイダンスを確認できます。
+Use the skill `/codescope:symbol-analysis` for usage guidance.
 
-## 設定
-
-環境変数:
-
-- `RUST_LOG`: ログレベル設定（例: `info`, `debug`）
-
-## 開発
+### Manual Installation
 
 ```bash
-# テスト実行
-cargo test
+# Clone the repository
+git clone https://github.com/t0k0sh1/codescope-mcp.git
+cd codescope-mcp
 
-# デバッグビルド
-cargo build
+# Build
+cargo build --release
+
+# Run as standalone MCP server
+cargo run --release
 ```
 
-## ライセンス
+## Configuration
+
+Environment variables:
+
+- `RUST_LOG`: Log level (e.g., `info`, `debug`, `warn`, `error`)
+
+## Usage Examples
+
+### Find Symbol Definition
+
+```json
+{
+  "symbol": "UserService",
+  "include_docs": true,
+  "language": "typescript"
+}
+```
+
+### Find Symbol Usages
+
+```json
+{
+  "symbol": "useState",
+  "include_contexts": true,
+  "language": "typescriptreact"
+}
+```
+
+### Search in Markdown
+
+```json
+{
+  "symbol": "Installation",
+  "language": "markdown"
+}
+```
+
+### Language Filter
+
+All tools support the optional `language` parameter:
+
+- `"typescript"` or `"ts"` - TypeScript files only
+- `"typescriptreact"` or `"tsx"` - TSX files only
+- `"markdown"` or `"md"` - Markdown files only
+- `null` or omitted - All supported languages
+
+## Development
+
+```bash
+# Run tests
+cargo test
+
+# Debug build
+cargo build
+
+# Release build
+cargo build --release
+```
+
+## License
 
 MIT

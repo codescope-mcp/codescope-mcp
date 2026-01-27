@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 
+use super::markdown::MarkdownLanguage;
 use super::traits::{LanguageId, LanguageSupport};
 use super::typescript::{TypeScriptLanguage, TypeScriptReactLanguage};
 
@@ -30,6 +31,9 @@ impl LanguageRegistry {
         ))?;
         registry.register(Arc::new(
             TypeScriptReactLanguage::new().context("Failed to create TSX language")?,
+        ))?;
+        registry.register(Arc::new(
+            MarkdownLanguage::new().context("Failed to create Markdown language")?,
         ))?;
 
         Ok(registry)
@@ -96,6 +100,7 @@ mod tests {
         let registry = LanguageRegistry::new().unwrap();
         assert!(registry.get(LanguageId::TypeScript).is_some());
         assert!(registry.get(LanguageId::TypeScriptReact).is_some());
+        assert!(registry.get(LanguageId::Markdown).is_some());
     }
 
     #[test]
@@ -107,6 +112,12 @@ mod tests {
 
         let tsx_lang = registry.get_by_extension("tsx").unwrap();
         assert_eq!(tsx_lang.id(), LanguageId::TypeScriptReact);
+
+        let md_lang = registry.get_by_extension("md").unwrap();
+        assert_eq!(md_lang.id(), LanguageId::Markdown);
+
+        let mdc_lang = registry.get_by_extension("mdc").unwrap();
+        assert_eq!(mdc_lang.id(), LanguageId::Markdown);
     }
 
     #[test]
@@ -119,7 +130,10 @@ mod tests {
         let tsx_path = PathBuf::from("src/App.tsx");
         assert!(registry.get_for_path(&tsx_path).is_some());
 
-        let unsupported_path = PathBuf::from("README.md");
+        let md_path = PathBuf::from("README.md");
+        assert!(registry.get_for_path(&md_path).is_some());
+
+        let unsupported_path = PathBuf::from("script.py");
         assert!(registry.get_for_path(&unsupported_path).is_none());
     }
 
@@ -129,6 +143,8 @@ mod tests {
 
         assert!(registry.is_supported(Path::new("test.ts")));
         assert!(registry.is_supported(Path::new("test.tsx")));
+        assert!(registry.is_supported(Path::new("test.md")));
+        assert!(registry.is_supported(Path::new("test.mdc")));
         assert!(!registry.is_supported(Path::new("test.py")));
         assert!(!registry.is_supported(Path::new("test.rs")));
     }

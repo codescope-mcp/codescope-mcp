@@ -14,6 +14,10 @@ pub struct DefinitionParams {
 
     /// Directories to exclude from search (e.g., ["dist", "node_modules"])
     pub exclude_dirs: Option<Vec<String>>,
+
+    /// Filter by language (e.g., "typescript", "typescriptreact", "markdown")
+    /// If not specified, searches all supported languages
+    pub language: Option<String>,
 }
 
 /// Parameters for find_in_comments tool
@@ -24,6 +28,10 @@ pub struct CommentSearchParams {
 
     /// Directories to exclude from search (e.g., ["dist", "node_modules"])
     pub exclude_dirs: Option<Vec<String>>,
+
+    /// Filter by language (e.g., "typescript", "typescriptreact", "markdown")
+    /// If not specified, searches all supported languages
+    pub language: Option<String>,
 }
 
 /// Response for find_in_comments tool
@@ -52,6 +60,10 @@ pub struct UsagesParams {
 
     /// Directories to exclude from search (e.g., ["dist", "node_modules"])
     pub exclude_dirs: Option<Vec<String>>,
+
+    /// Filter by language (e.g., "typescript", "typescriptreact", "markdown")
+    /// If not specified, searches all supported languages
+    pub language: Option<String>,
 }
 
 /// Response for symbol.usages tool
@@ -72,6 +84,10 @@ pub struct MethodCallsParams {
 
     /// Directories to exclude from search (e.g., ["dist", "node_modules"])
     pub exclude_dirs: Option<Vec<String>>,
+
+    /// Filter by language (e.g., "typescript", "typescriptreact", "markdown")
+    /// If not specified, searches all supported languages
+    pub language: Option<String>,
 }
 
 /// Parameters for find_imports tool
@@ -82,6 +98,10 @@ pub struct ImportsParams {
 
     /// Directories to exclude from search (e.g., ["dist", "node_modules"])
     pub exclude_dirs: Option<Vec<String>>,
+
+    /// Filter by language (e.g., "typescript", "typescriptreact", "markdown")
+    /// If not specified, searches all supported languages
+    pub language: Option<String>,
 }
 
 /// Parameters for get_code_at_location tool
@@ -98,4 +118,22 @@ pub struct CodeAtLocationParams {
 
     /// Lines to include after the target line (default: 3)
     pub context_after: Option<usize>,
+}
+
+/// Parameters for get_symbol_at_location tool
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SymbolAtLocationParams {
+    /// File path to read from
+    pub file_path: String,
+
+    /// Line number (1-indexed)
+    pub line: usize,
+}
+
+/// Response for get_symbol_at_location tool
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct SymbolAtLocationResponse {
+    /// Symbol definition at the location, if found
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<SymbolDefinition>,
 }
