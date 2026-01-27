@@ -1859,3 +1859,157 @@ fn test_css_generic_parser_handles_css_files() {
     );
     assert_eq!(lang.name(), "Css", "Should use Css language support");
 }
+
+// ======================================
+// Python tests
+// ======================================
+
+#[test]
+fn test_python_find_class_definition() {
+    let file_path = fixtures_path().join("sample.py");
+    let definitions = find_definitions(&file_path, "UserService");
+
+    assert!(!definitions.is_empty(), "Should find UserService class");
+    assert_eq!(definitions[0].0, "UserService");
+    assert_eq!(definitions[0].1, "class");
+}
+
+#[test]
+fn test_python_find_function_definition() {
+    let file_path = fixtures_path().join("sample.py");
+    let definitions = find_definitions(&file_path, "process_user");
+
+    assert!(!definitions.is_empty(), "Should find process_user function");
+    assert_eq!(definitions[0].0, "process_user");
+    assert_eq!(definitions[0].1, "function");
+}
+
+#[test]
+fn test_python_find_constructor() {
+    let file_path = fixtures_path().join("sample.py");
+    let definitions = find_definitions(&file_path, "__init__");
+
+    assert!(!definitions.is_empty(), "Should find __init__ constructors");
+    // Should find constructors for UserService, User, and Logger
+    let constructor_defs: Vec<_> = definitions
+        .iter()
+        .filter(|(_, k)| k == "constructor")
+        .collect();
+    assert!(
+        constructor_defs.len() >= 3,
+        "Should find at least 3 constructors"
+    );
+}
+
+#[test]
+fn test_python_find_method_definition() {
+    let file_path = fixtures_path().join("sample.py");
+    let definitions = find_definitions(&file_path, "add_user");
+
+    assert!(!definitions.is_empty(), "Should find add_user method");
+    assert_eq!(definitions[0].0, "add_user");
+    assert_eq!(definitions[0].1, "method");
+}
+
+#[test]
+fn test_python_find_decorated_method() {
+    let file_path = fixtures_path().join("sample.py");
+
+    // Test @property decorated method
+    let property_defs = find_definitions(&file_path, "formatted_prefix");
+    assert!(
+        !property_defs.is_empty(),
+        "Should find formatted_prefix property method"
+    );
+    assert_eq!(property_defs[0].1, "method");
+
+    // Test @classmethod decorated method
+    let classmethod_defs = find_definitions(&file_path, "create_default");
+    assert!(
+        !classmethod_defs.is_empty(),
+        "Should find create_default classmethod"
+    );
+    assert_eq!(classmethod_defs[0].1, "method");
+}
+
+#[test]
+fn test_python_find_module_variable() {
+    let file_path = fixtures_path().join("sample.py");
+    let definitions = find_definitions(&file_path, "DEFAULT_CONFIG");
+
+    assert!(
+        !definitions.is_empty(),
+        "Should find DEFAULT_CONFIG module variable"
+    );
+    assert_eq!(definitions[0].0, "DEFAULT_CONFIG");
+    assert_eq!(definitions[0].1, "variable");
+}
+
+/// Helper function to find Python usages using GenericParser
+fn find_py_usages(file_path: &std::path::Path, symbol_name: &str) -> Vec<String> {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+
+    let source_code = std::fs::read_to_string(file_path).expect("Failed to read file");
+    let (tree, lang) = parser
+        .parse_with_language(file_path, &source_code)
+        .expect("Failed to parse file");
+
+    let query = lang.usages_query();
+    let mut cursor = tree_sitter::QueryCursor::new();
+
+    use streaming_iterator::StreamingIterator;
+    let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
+
+    let mut results = Vec::new();
+    while let Some(m) = matches.next() {
+        for capture in m.captures {
+            let capture_name = &query.capture_names()[capture.index as usize];
+            if *capture_name == "usage" {
+                let usage_text = capture
+                    .node
+                    .utf8_text(source_code.as_bytes())
+                    .unwrap_or("")
+                    .to_string();
+                if usage_text == symbol_name {
+                    results.push(usage_text);
+                }
+            }
+        }
+    }
+
+    results
+}
+
+#[test]
+fn test_python_find_usages() {
+    let file_path = fixtures_path().join("sample.py");
+    let usages = find_py_usages(&file_path, "user");
+
+    assert!(
+        !usages.is_empty(),
+        "Should find 'user' usages in Python file"
+    );
+}
+
+// Note: test_python_find_todo_comments is not included because
+// find_comments_in_file currently only supports // and /* */ style comments.
+// Python uses # for comments, which would require extending the comment parser.
+
+#[test]
+fn test_python_generic_parser_handles_py_files() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.py");
+
+    let source_code = std::fs::read_to_string(&file_path).expect("Failed to read file");
+    let result = parser.parse_with_language(&file_path, &source_code);
+
+    assert!(result.is_ok(), "GenericParser should handle .py files");
+    let (tree, lang) = result.unwrap();
+    assert!(
+        tree.root_node().child_count() > 0,
+        "Should produce valid AST with children"
+    );
+    assert_eq!(lang.name(), "Python", "Should use Python language support");
+}
