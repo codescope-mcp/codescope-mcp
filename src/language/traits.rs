@@ -16,6 +16,7 @@ pub enum LanguageId {
     Rust,
     Go,
     Java,
+    Sql,
 }
 
 impl std::fmt::Display for LanguageId {
@@ -32,6 +33,7 @@ impl std::fmt::Display for LanguageId {
             LanguageId::Rust => write!(f, "Rust"),
             LanguageId::Go => write!(f, "Go"),
             LanguageId::Java => write!(f, "Java"),
+            LanguageId::Sql => write!(f, "Sql"),
         }
     }
 }
