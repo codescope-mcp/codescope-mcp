@@ -5,6 +5,13 @@ use std::time::SystemTime;
 use anyhow::{Context, Result};
 use dashmap::DashMap;
 
+/// Cached file content with its modification time
+#[derive(Clone)]
+pub struct CachedContent {
+    pub content: Arc<String>,
+    pub modified_time: SystemTime,
+}
+
 /// Cache entry for file content
 struct FileContentEntry {
     content: Arc<String>,
@@ -31,7 +38,10 @@ impl FileContentCache {
     ///
     /// If the file is in cache and hasn't been modified, returns the cached content.
     /// Otherwise, reads the file and caches the result.
-    pub fn get_or_read(&self, path: &Path) -> Result<Arc<String>> {
+    ///
+    /// Returns both the content and modification time to allow callers to pass
+    /// the mtime to other caches for consistency.
+    pub fn get_or_read(&self, path: &Path) -> Result<CachedContent> {
         let path_buf = path.to_path_buf();
 
         // Check if we have a valid cached entry
@@ -39,20 +49,29 @@ impl FileContentCache {
             if let Ok(metadata) = std::fs::metadata(path) {
                 if let Ok(modified) = metadata.modified() {
                     if modified == entry.modified_time {
-                        return Ok(entry.content.clone());
+                        return Ok(CachedContent {
+                            content: entry.content.clone(),
+                            modified_time: entry.modified_time,
+                        });
                     }
                 }
             }
+            // Entry is stale - remove it to prevent memory bloat
+            drop(entry); // Release the lock before removing
+            self.cache.remove(&path_buf);
         }
 
-        // Read file and cache
+        // Get metadata (including modification time) BEFORE reading to minimize TOCTOU window
+        // Note: There's still a small window between stat and read, but this is the best
+        // we can do without platform-specific atomic APIs. By getting mtime first,
+        // if the file changes during read, we'll have an older mtime and the cache
+        // will be invalidated on next access (fail-safe behavior).
+        let modified_time = std::fs::metadata(path)
+            .and_then(|m| m.modified())
+            .unwrap_or_else(|_| SystemTime::now());
+
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read file: {}", path.display()))?;
-
-        let modified_time = std::fs::metadata(path)
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .unwrap_or_else(SystemTime::now);
 
         let content = Arc::new(content);
         self.cache.insert(
@@ -63,7 +82,10 @@ impl FileContentCache {
             },
         );
 
-        Ok(content)
+        Ok(CachedContent {
+            content,
+            modified_time,
+        })
     }
 
     /// Clear the cache
@@ -107,15 +129,33 @@ mod tests {
         let path = temp_file.path();
 
         // First read
-        let content1 = cache.get_or_read(path).unwrap();
-        assert!(content1.contains("test content"));
+        let result1 = cache.get_or_read(path).unwrap();
+        assert!(result1.content.contains("test content"));
 
         // Second read should use cache
-        let content2 = cache.get_or_read(path).unwrap();
-        assert_eq!(content1, content2);
+        let result2 = cache.get_or_read(path).unwrap();
+        assert_eq!(result1.content, result2.content);
 
         // Both should be the same Arc instance
-        assert!(Arc::ptr_eq(&content1, &content2));
+        assert!(Arc::ptr_eq(&result1.content, &result2.content));
+
+        // Modification times should match
+        assert_eq!(result1.modified_time, result2.modified_time);
+    }
+
+    #[test]
+    fn test_file_content_cache_returns_mtime() {
+        let cache = FileContentCache::new();
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "test content").unwrap();
+        let path = temp_file.path();
+
+        let result = cache.get_or_read(path).unwrap();
+
+        // Verify that mtime is reasonable (not the fallback SystemTime::now())
+        let actual_mtime = std::fs::metadata(path).unwrap().modified().unwrap();
+        assert_eq!(result.modified_time, actual_mtime);
     }
 
     #[test]
@@ -141,5 +181,30 @@ mod tests {
         let cache = FileContentCache::new();
         let result = cache.get_or_read(Path::new("/nonexistent/file.txt"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_stale_entry_removed_on_access() {
+        let cache = FileContentCache::new();
+
+        // Create a temporary file
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_path_buf();
+
+        // Manually insert a stale entry with an old mtime
+        let old_mtime = SystemTime::UNIX_EPOCH;
+        cache.cache.insert(
+            path.clone(),
+            FileContentEntry {
+                content: Arc::new("old content".to_string()),
+                modified_time: old_mtime,
+            },
+        );
+
+        // Access should detect staleness and remove the entry
+        let result = cache.get_or_read(&path).unwrap();
+
+        // Should get fresh content, not "old content"
+        assert!(!result.content.contains("old content"));
     }
 }

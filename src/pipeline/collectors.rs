@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 use std::path::Path;
-use std::sync::Arc;
 
 use anyhow::Result;
 use streaming_iterator::StreamingIterator;
 
+use crate::cache::CachedContent;
 use crate::context::extractor::extract_contexts;
 use crate::parser::CachedParser;
 use crate::symbol::comment::{
@@ -22,7 +22,7 @@ pub trait ResultCollector: Sync {
         &self,
         parser: &mut CachedParser,
         path: &Path,
-        source_code: &Arc<String>,
+        cached_content: &CachedContent,
     ) -> Result<Vec<Self::Item>>;
 }
 
@@ -39,9 +39,11 @@ impl ResultCollector for DefinitionCollector {
         &self,
         parser: &mut CachedParser,
         path: &Path,
-        source_code: &Arc<String>,
+        cached_content: &CachedContent,
     ) -> Result<Vec<Self::Item>> {
-        let (tree, language) = parser.parse_with_language(path, source_code)?;
+        let source_code = &cached_content.content;
+        let (tree, language) =
+            parser.parse_with_language(path, source_code, cached_content.modified_time)?;
 
         let mut definitions = Vec::new();
         let query = language.definitions_query();
@@ -149,9 +151,11 @@ impl ResultCollector for UsageCollector {
         &self,
         parser: &mut CachedParser,
         path: &Path,
-        source_code: &Arc<String>,
+        cached_content: &CachedContent,
     ) -> Result<Vec<Self::Item>> {
-        let (tree, language) = parser.parse_with_language(path, source_code)?;
+        let source_code = &cached_content.content;
+        let (tree, language) =
+            parser.parse_with_language(path, source_code, cached_content.modified_time)?;
 
         let mut usages = Vec::new();
         let mut seen: HashSet<(usize, usize)> = HashSet::new();
@@ -237,7 +241,7 @@ impl ResultCollector for MethodCallCollector {
         &self,
         parser: &mut CachedParser,
         path: &Path,
-        source_code: &Arc<String>,
+        cached_content: &CachedContent,
     ) -> Result<Vec<Self::Item>> {
         let collector = UsageCollector {
             symbol: self.method_name.clone(),
@@ -246,7 +250,7 @@ impl ResultCollector for MethodCallCollector {
             object_filter: self.object_name.clone(),
         };
 
-        let usages = collector.process_file(parser, path, source_code)?;
+        let usages = collector.process_file(parser, path, cached_content)?;
 
         // Filter for MethodCall only
         Ok(usages
@@ -268,7 +272,7 @@ impl ResultCollector for ImportCollector {
         &self,
         parser: &mut CachedParser,
         path: &Path,
-        source_code: &Arc<String>,
+        cached_content: &CachedContent,
     ) -> Result<Vec<Self::Item>> {
         let collector = UsageCollector {
             symbol: self.symbol.clone(),
@@ -277,7 +281,7 @@ impl ResultCollector for ImportCollector {
             object_filter: None,
         };
 
-        let usages = collector.process_file(parser, path, source_code)?;
+        let usages = collector.process_file(parser, path, cached_content)?;
 
         // Filter for Import only
         Ok(usages
@@ -299,7 +303,7 @@ impl ResultCollector for CommentCollector {
         &self,
         _parser: &mut CachedParser,
         path: &Path,
-        _source_code: &Arc<String>,
+        _cached_content: &CachedContent,
     ) -> Result<Vec<Self::Item>> {
         let ext = path.extension().and_then(|ext| ext.to_str());
 

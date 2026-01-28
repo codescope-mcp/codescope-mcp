@@ -1,7 +1,8 @@
 use std::path::PathBuf;
-
 use std::sync::Arc;
+use std::time::SystemTime;
 
+use codescope_mcp::cache::CachedContent;
 use codescope_mcp::language::LanguageRegistry;
 use codescope_mcp::parser::generic::GenericParser;
 use codescope_mcp::parser::typescript::TypeScriptParser;
@@ -2547,7 +2548,14 @@ fn test_sql_comment_on_table_docs() {
     let mut parser = CachedParser::new(registry, cache).expect("Failed to create parser");
     let file_path = fixtures_path().join("sample.sql");
 
-    let source_code = Arc::new(std::fs::read_to_string(&file_path).expect("Failed to read file"));
+    let content = Arc::new(std::fs::read_to_string(&file_path).expect("Failed to read file"));
+    let modified_time = std::fs::metadata(&file_path)
+        .and_then(|m| m.modified())
+        .unwrap_or_else(|_| SystemTime::now());
+    let cached_content = CachedContent {
+        content,
+        modified_time,
+    };
 
     let collector = DefinitionCollector {
         symbol: "users".to_string(),
@@ -2555,7 +2563,7 @@ fn test_sql_comment_on_table_docs() {
     };
 
     let definitions = collector
-        .process_file(&mut parser, &file_path, &source_code)
+        .process_file(&mut parser, &file_path, &cached_content)
         .expect("Failed to collect definitions");
 
     // Find the table definition (not the column definitions)
@@ -2582,7 +2590,14 @@ fn test_sql_comment_on_column_docs() {
     let mut parser = CachedParser::new(registry, cache).expect("Failed to create parser");
     let file_path = fixtures_path().join("sample.sql");
 
-    let source_code = Arc::new(std::fs::read_to_string(&file_path).expect("Failed to read file"));
+    let content = Arc::new(std::fs::read_to_string(&file_path).expect("Failed to read file"));
+    let modified_time = std::fs::metadata(&file_path)
+        .and_then(|m| m.modified())
+        .unwrap_or_else(|_| SystemTime::now());
+    let cached_content = CachedContent {
+        content,
+        modified_time,
+    };
 
     let collector = DefinitionCollector {
         symbol: "email".to_string(),
@@ -2590,7 +2605,7 @@ fn test_sql_comment_on_column_docs() {
     };
 
     let definitions = collector
-        .process_file(&mut parser, &file_path, &source_code)
+        .process_file(&mut parser, &file_path, &cached_content)
         .expect("Failed to collect definitions");
 
     // email column in users table should have docs

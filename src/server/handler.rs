@@ -285,7 +285,7 @@ impl CodeScopeServer {
         }
 
         // Read file and parse using cache
-        let source_code = self
+        let cached_content = self
             .cache_manager
             .file_cache
             .get_or_read(&path)
@@ -298,13 +298,14 @@ impl CodeScopeServer {
         .map_err(|e| McpError::internal_error(format!("Failed to create parser: {}", e), None))?;
 
         let (tree, lang) = parser
-            .parse_with_language(&path, &source_code)
+            .parse_with_language(&path, &cached_content.content, cached_content.modified_time)
             .map_err(|e| McpError::internal_error(format!("Failed to parse file: {}", e), None))?;
 
         // Find the symbol containing the given line
         let target_line = line.saturating_sub(1); // Convert to 0-indexed
         let query = lang.definitions_query();
         let mappings = lang.definition_mappings();
+        let source_code = &cached_content.content;
 
         let mut cursor = tree_sitter::QueryCursor::new();
         use streaming_iterator::StreamingIterator;
