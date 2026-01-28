@@ -4,21 +4,21 @@
     "name": "t0k0sh1"
   },
   "metadata": {
-    "description": "TypeScript/TSX symbol analysis and code navigation tools",
-    "version": "0.1.0"
+    "description": "Multi-language symbol analysis and code navigation tools for TypeScript, JavaScript, Python, Rust, Go, Java, HTML, CSS, SQL, and Markdown",
+    "version": "0.1.1"
   },
   "plugins": [
     {
       "name": "codescope",
       "source": "./plugins/codescope",
-      "description": "TypeScript/TSX symbol analysis and code navigation MCP server",
-      "version": "0.1.0",
+      "description": "Multi-language symbol analysis and code navigation MCP server",
+      "version": "0.1.1",
       "author": {
         "name": "t0k0sh1"
       },
-      "repository": "https://github.com/codescope-mcp/codescope-mcp",
+      "repository": "https://github.com/t0k0sh1/codescope-mcp",
       "license": "MIT",
-      "keywords": ["typescript", "tsx", "symbol-analysis", "code-navigation", "mcp"],
+      "keywords": ["typescript", "javascript", "python", "rust", "go", "java", "html", "css", "sql", "markdown", "symbol-analysis", "code-navigation", "mcp"],
       "category": "code-intelligence"
     }
   ]
