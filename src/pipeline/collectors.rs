@@ -7,8 +7,10 @@ use streaming_iterator::StreamingIterator;
 use crate::context::extractor::extract_contexts;
 use crate::parser::GenericParser;
 use crate::symbol::comment::{
-    extract_docs_before_line, find_comments_in_file, find_text_in_markdown_file,
+    extract_docs_before_line, find_comments_in_file, find_comments_in_sql_file,
+    find_text_in_markdown_file,
 };
+use crate::symbol::sql_comment::{extract_sql_comments, find_parent_table_name};
 use crate::symbol::types::{CommentMatch, SymbolDefinition, SymbolKind, SymbolUsage, UsageKind};
 
 /// Trait for collecting results from parsed files
@@ -34,6 +36,14 @@ impl ResultCollector for DefinitionCollector {
         let mut definitions = Vec::new();
         let query = language.definitions_query();
         let mappings = language.definition_mappings();
+
+        // For languages with separate doc statements (e.g., SQL COMMENT ON),
+        // extract documentation map first
+        let sql_comment_map = if self.include_docs && language.uses_separate_docs() {
+            Some(extract_sql_comments(&tree, &source_code, query))
+        } else {
+            None
+        };
 
         let mut cursor = tree_sitter::QueryCursor::new();
         let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
@@ -70,7 +80,29 @@ impl ResultCollector for DefinitionCollector {
                         .to_string();
 
                     let docs = if self.include_docs {
-                        extract_docs_before_line(&source_code, node.start_position().row)
+                        if let Some(ref comment_map) = sql_comment_map {
+                            // For SQL: look up documentation from COMMENT ON statements
+                            match symbol_kind {
+                                SymbolKind::Column => {
+                                    // For columns, use "table.column" key
+                                    if let Some(table_name) =
+                                        find_parent_table_name(node, &source_code)
+                                    {
+                                        let key = format!("{}.{}", table_name, name_str);
+                                        comment_map.get(&key).cloned()
+                                    } else {
+                                        None
+                                    }
+                                }
+                                _ => {
+                                    // For tables/views/functions/etc., use just the name
+                                    comment_map.get(name_str).cloned()
+                                }
+                            }
+                        } else {
+                            // For other languages: extract docs from comments before the definition
+                            extract_docs_before_line(&source_code, node.start_position().row)
+                        }
                     } else {
                         None
                     };
@@ -240,19 +272,15 @@ impl ResultCollector for CommentCollector {
     type Item = CommentMatch;
 
     fn process_file(&self, _parser: &mut GenericParser, path: &Path) -> Result<Vec<Self::Item>> {
-        // Check if this is a Markdown file
-        let is_markdown = path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| ext == "md" || ext == "mdc")
-            .unwrap_or(false);
+        let ext = path.extension().and_then(|ext| ext.to_str());
 
-        if is_markdown {
-            // For Markdown files, perform full text search since there's no comment syntax
-            find_text_in_markdown_file(path, &self.text)
-        } else {
-            // For TypeScript/TSX files, search within comments only
-            find_comments_in_file(path, &self.text)
+        match ext {
+            // Markdown files: full text search (no comment syntax)
+            Some("md" | "mdc") => find_text_in_markdown_file(path, &self.text),
+            // SQL files: -- and /* */ comments
+            Some("sql") => find_comments_in_sql_file(path, &self.text),
+            // Other files: // and /* */ comments
+            _ => find_comments_in_file(path, &self.text),
         }
     }
 }

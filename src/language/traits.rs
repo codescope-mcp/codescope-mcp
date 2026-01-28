@@ -70,4 +70,12 @@ pub trait LanguageSupport: Send + Sync {
 
     /// Get the mappings from capture names to symbol kinds
     fn definition_mappings(&self) -> &[SymbolKindMapping];
+
+    /// Whether this language uses separate documentation statements (e.g., SQL COMMENT ON).
+    ///
+    /// If true, documentation is extracted from separate statements in the file
+    /// rather than from comments immediately before the definition.
+    fn uses_separate_docs(&self) -> bool {
+        false
+    }
 }

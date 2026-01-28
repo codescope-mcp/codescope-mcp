@@ -207,6 +207,153 @@ pub fn get_code_at_location(
     })
 }
 
+/// Find comments containing the specified text in a SQL file
+///
+/// SQL supports:
+/// - `--` single-line comments
+/// - `/* */` block comments
+pub fn find_comments_in_sql_file(file_path: &Path, search_text: &str) -> Result<Vec<CommentMatch>> {
+    let source = std::fs::read_to_string(file_path)?;
+    let file_path_str = file_path.to_string_lossy().to_string();
+
+    let mut matches = Vec::new();
+    let mut in_block_comment = false;
+    let mut block_comment_start_line = 0;
+    let mut block_comment_start_col = 0;
+    let mut block_comment_content = String::new();
+
+    for (line_num, line) in source.lines().enumerate() {
+        let line_1indexed = line_num + 1;
+
+        if in_block_comment {
+            // Continue collecting block comment content
+            if let Some(end_pos) = line.find("*/") {
+                // Block comment ends on this line
+                block_comment_content.push_str(&line[..end_pos + 2]);
+                in_block_comment = false;
+
+                // Check if the block comment contains the search text
+                if block_comment_content.contains(search_text) {
+                    matches.push(CommentMatch {
+                        file_path: file_path_str.clone(),
+                        line: block_comment_start_line,
+                        column: block_comment_start_col,
+                        comment_type: CommentType::Block,
+                        content: block_comment_content.clone(),
+                    });
+                }
+                block_comment_content.clear();
+
+                // Check remaining content after block comment end
+                let remaining = &line[end_pos + 2..];
+                if let Some(new_start) = remaining.find("/*") {
+                    in_block_comment = true;
+                    block_comment_start_line = line_1indexed;
+                    block_comment_start_col = end_pos + 2 + new_start;
+                    block_comment_content = remaining[new_start..].to_string();
+                    block_comment_content.push('\n');
+                } else if let Some(single_start) = remaining.find("--") {
+                    let comment_content = remaining[single_start..].to_string();
+                    if comment_content.contains(search_text) {
+                        matches.push(CommentMatch {
+                            file_path: file_path_str.clone(),
+                            line: line_1indexed,
+                            column: end_pos + 2 + single_start,
+                            comment_type: CommentType::SingleLine,
+                            content: comment_content,
+                        });
+                    }
+                }
+            } else {
+                // Block comment continues
+                block_comment_content.push_str(line);
+                block_comment_content.push('\n');
+            }
+        } else {
+            // Not in a block comment, look for comment starts
+            let mut pos = 0;
+            while pos < line.len() {
+                let remaining = &line[pos..];
+
+                // Check for block comment start
+                if let Some(block_start) = remaining.find("/*") {
+                    // Check for single line comment before block comment
+                    if let Some(single_start) = remaining.find("--") {
+                        if single_start < block_start {
+                            // Single line comment comes first (rest of line is comment)
+                            let comment_content = remaining[single_start..].to_string();
+                            if comment_content.contains(search_text) {
+                                matches.push(CommentMatch {
+                                    file_path: file_path_str.clone(),
+                                    line: line_1indexed,
+                                    column: pos + single_start,
+                                    comment_type: CommentType::SingleLine,
+                                    content: comment_content,
+                                });
+                            }
+                            break;
+                        }
+                    }
+
+                    // Check if block comment ends on the same line
+                    let after_start = &remaining[block_start + 2..];
+                    if let Some(end_offset) = after_start.find("*/") {
+                        // Block comment ends on this line
+                        let comment_content =
+                            remaining[block_start..block_start + 2 + end_offset + 2].to_string();
+                        if comment_content.contains(search_text) {
+                            matches.push(CommentMatch {
+                                file_path: file_path_str.clone(),
+                                line: line_1indexed,
+                                column: pos + block_start,
+                                comment_type: CommentType::Block,
+                                content: comment_content,
+                            });
+                        }
+                        pos += block_start + 2 + end_offset + 2;
+                    } else {
+                        // Block comment continues to next line
+                        in_block_comment = true;
+                        block_comment_start_line = line_1indexed;
+                        block_comment_start_col = pos + block_start;
+                        block_comment_content = remaining[block_start..].to_string();
+                        block_comment_content.push('\n');
+                        break;
+                    }
+                } else if let Some(single_start) = remaining.find("--") {
+                    // SQL single line comment
+                    let comment_content = remaining[single_start..].to_string();
+                    if comment_content.contains(search_text) {
+                        matches.push(CommentMatch {
+                            file_path: file_path_str.clone(),
+                            line: line_1indexed,
+                            column: pos + single_start,
+                            comment_type: CommentType::SingleLine,
+                            content: comment_content,
+                        });
+                    }
+                    break;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    // Handle case where file ends while still in a block comment
+    if in_block_comment && block_comment_content.contains(search_text) {
+        matches.push(CommentMatch {
+            file_path: file_path_str,
+            line: block_comment_start_line,
+            column: block_comment_start_col,
+            comment_type: CommentType::Block,
+            content: block_comment_content,
+        });
+    }
+
+    Ok(matches)
+}
+
 /// Extract documentation comments (JSDoc or regular comments) before a given line
 pub fn extract_docs_before_line(source: &str, start_line: usize) -> Option<String> {
     if start_line == 0 {
@@ -357,5 +504,51 @@ function foo() {}"#;
         assert_eq!(matches[0].column, 0);
         assert_eq!(matches[1].column, 5);
         assert_eq!(matches[2].column, 10);
+    }
+
+    #[test]
+    fn test_find_sql_single_line_comments() {
+        let mut file = NamedTempFile::with_suffix(".sql").unwrap();
+        writeln!(file, "-- TODO: fix this query").unwrap();
+        writeln!(file, "SELECT * FROM users;").unwrap();
+        writeln!(file, "-- Another TODO here").unwrap();
+
+        let matches = find_comments_in_sql_file(file.path(), "TODO").unwrap();
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].line, 1);
+        assert_eq!(matches[0].comment_type, CommentType::SingleLine);
+        assert_eq!(matches[1].line, 3);
+    }
+
+    #[test]
+    fn test_find_sql_block_comments() {
+        let mut file = NamedTempFile::with_suffix(".sql").unwrap();
+        writeln!(file, "/* FIXME: broken query */").unwrap();
+        writeln!(file, "SELECT * FROM users;").unwrap();
+        writeln!(file, "/*").unwrap();
+        writeln!(file, " * Another FIXME").unwrap();
+        writeln!(file, " */").unwrap();
+
+        let matches = find_comments_in_sql_file(file.path(), "FIXME").unwrap();
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].comment_type, CommentType::Block);
+        assert_eq!(matches[1].comment_type, CommentType::Block);
+    }
+
+    #[test]
+    fn test_find_sql_mixed_comments() {
+        let mut file = NamedTempFile::with_suffix(".sql").unwrap();
+        writeln!(file, "-- TODO: single line").unwrap();
+        writeln!(file, "/* TODO: block comment */").unwrap();
+        writeln!(file, "SELECT * FROM users; -- inline TODO").unwrap();
+
+        let matches = find_comments_in_sql_file(file.path(), "TODO").unwrap();
+        assert_eq!(matches.len(), 3);
+        assert_eq!(matches[0].line, 1);
+        assert_eq!(matches[0].comment_type, CommentType::SingleLine);
+        assert_eq!(matches[1].line, 2);
+        assert_eq!(matches[1].comment_type, CommentType::Block);
+        assert_eq!(matches[2].line, 3);
+        assert_eq!(matches[2].comment_type, CommentType::SingleLine);
     }
 }

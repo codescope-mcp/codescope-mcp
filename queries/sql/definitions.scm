@@ -36,3 +36,20 @@
 ; id INT PRIMARY KEY, name VARCHAR(100), ...
 (column_definition
   name: (identifier) @name) @definition.column
+
+; COMMENT ON statements for documentation extraction
+; COMMENT ON TABLE users IS 'User accounts table';
+(comment_statement
+  (keyword_table)
+  (object_reference
+    (identifier) @comment.table.name)
+  (literal) @comment.table.text) @comment.table
+
+; COMMENT ON COLUMN users.email IS 'Email address';
+(comment_statement
+  (keyword_column)
+  (object_reference
+    (object_reference
+      (identifier) @comment.column.table)
+    (identifier) @comment.column.name)
+  (literal) @comment.column.text) @comment.column

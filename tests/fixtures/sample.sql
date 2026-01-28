@@ -85,3 +85,9 @@ SELECT name, email FROM users WHERE id = 1;
 INSERT INTO users (name, email) VALUES ('John Doe', 'john@example.com');
 UPDATE users SET name = 'Jane Doe' WHERE id = 1;
 DELETE FROM orders WHERE status = 'cancelled';
+
+-- COMMENT ON examples for documentation testing
+COMMENT ON TABLE users IS 'User accounts table storing all registered users';
+COMMENT ON COLUMN users.email IS 'Primary email address for user notifications';
+COMMENT ON COLUMN users.created_at IS 'Timestamp when the user account was created';
+COMMENT ON TABLE orders IS 'Customer orders and purchase history';
