@@ -1,6 +1,6 @@
 # CodeScope MCP
 
-An MCP (Model Context Protocol) server that provides symbol analysis and code navigation for TypeScript, JavaScript, Python, Rust, Go, Java, HTML, CSS, and Markdown projects.
+An MCP (Model Context Protocol) server that provides symbol analysis and code navigation for TypeScript, JavaScript, Python, Rust, Go, Java, HTML, CSS, SQL, and Markdown projects.
 
 ## Features
 

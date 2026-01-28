@@ -132,15 +132,15 @@ This retrieves the entire function where `processData` is called.
 
 | Language | Extensions | Symbol Types |
 |----------|------------|--------------|
-| TypeScript | `.ts` | Functions, Classes, Methods, Interfaces, Enums, Variables, Type Aliases |
+| TypeScript | `.ts` | Functions, Classes, Methods, Constructors, Interfaces, Enums, Variables, Arrow Functions, Type Aliases |
 | TypeScript React | `.tsx` | Same as TypeScript |
-| JavaScript | `.js`, `.mjs`, `.cjs` | Functions, Classes, Methods, Variables, Arrow Functions |
+| JavaScript | `.js`, `.mjs`, `.cjs` | Functions, Classes, Methods, Constructors, Variables, Arrow Functions |
 | JavaScript React | `.jsx` | Same as JavaScript |
-| Python | `.py`, `.pyi` | Functions, Classes, Methods, Variables |
-| Rust | `.rs` | Functions, Structs, Enums, Traits, Impls, Methods, Modules, Macros |
-| Go | `.go` | Functions, Methods, Structs, Interfaces, Type Aliases |
-| Java | `.java` | Classes, Interfaces, Enums, Methods, Fields, Annotations |
+| Python | `.py`, `.pyi` | Functions, Classes, Methods, Constructors (__init__), Variables |
+| Rust | `.rs` | Functions, Structs, Enums, Traits, Impls, Methods, Type Aliases, Modules, Consts, Statics, Macros |
+| Go | `.go` | Functions, Methods, Structs, Interfaces, Type Aliases, Consts, Variables |
+| Java | `.java` | Classes, Interfaces, Enums, Methods, Constructors, Fields, Annotations |
 | HTML | `.html`, `.htm` | Elements, IDs, Classes |
-| CSS | `.css` | Selectors, Variables, Keyframes |
-| SQL | `.sql` | Tables, Views, Procedures, Indexes, Triggers |
+| CSS | `.css` | Class Selectors, ID Selectors, Variables, Keyframes |
+| SQL | `.sql` | Tables, Views, Procedures, Indexes, Triggers, Columns |
 | Markdown | `.md`, `.mdc` | Headings, Code Blocks, Link References |
