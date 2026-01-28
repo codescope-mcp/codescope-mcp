@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Multi-language symbol analysis and code navigation tools for TypeScript, JavaScript, Python, Rust, Go, Java, HTML, CSS, SQL, and Markdown",
-    "version": "0.1.1"
+    "version": "0.1.2"
   },
   "plugins": [
     {
       "name": "codescope",
       "source": "./plugins/codescope",
       "description": "Multi-language symbol analysis and code navigation MCP server",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "author": {
         "name": "t0k0sh1"
       },
