@@ -332,7 +332,11 @@ pub fn get_code_at_location(
     })
 }
 
-/// Extract documentation comments (JSDoc or regular comments) before a given line
+/// Extract documentation comments (JSDoc or regular comments) immediately before a given line
+///
+/// Only extracts documentation that is directly associated with the symbol:
+/// - Maximum 1 empty line allowed between the symbol and its documentation
+/// - Comments must be contiguous (no code or multiple empty lines in between)
 pub fn extract_docs_before_line(source: &str, start_line: usize) -> Option<String> {
     if start_line == 0 {
         return None;
@@ -341,6 +345,8 @@ pub fn extract_docs_before_line(source: &str, start_line: usize) -> Option<Strin
     let lines: Vec<&str> = source.lines().collect();
     let mut doc_lines = Vec::new();
     let mut in_block_comment = false;
+    let mut empty_line_count = 0;
+    const MAX_EMPTY_LINES_BEFORE_DOC: usize = 1;
 
     // Start from the line before the definition and go backwards
     for i in (0..start_line).rev() {
@@ -356,17 +362,27 @@ pub fn extract_docs_before_line(source: &str, start_line: usize) -> Option<Strin
             // Start of a block comment (reading backwards)
             in_block_comment = true;
             doc_lines.push(*line);
+            // Reset empty line count since we found actual documentation
+            empty_line_count = 0;
         } else if trimmed.starts_with("//") {
             // Single line comment
             doc_lines.push(*line);
+            // Reset empty line count since we found actual documentation
+            empty_line_count = 0;
         } else if trimmed.starts_with("*") && !trimmed.starts_with("*/") {
             // Middle of a JSDoc/block comment
             doc_lines.push(*line);
         } else if trimmed.is_empty() {
-            // Allow empty lines at the beginning, but stop if we've already found comments
+            empty_line_count += 1;
+            // Allow limited empty lines only before finding any documentation
             if doc_lines.is_empty() {
+                if empty_line_count > MAX_EMPTY_LINES_BEFORE_DOC {
+                    // Too many empty lines before any documentation - no docs for this symbol
+                    break;
+                }
                 continue;
             } else {
+                // Already found documentation, stop at empty line
                 break;
             }
         } else {
@@ -674,5 +690,62 @@ function foo() {}"#;
         // Lines 5-6: block f
         assert_eq!(matches[5].line, 5);
         assert!(matches[5].content.contains("f"));
+    }
+
+    // ========== Doc extraction precision tests ==========
+
+    #[test]
+    fn test_extract_docs_with_one_empty_line() {
+        // One empty line between doc and symbol is allowed
+        let source = r#"/**
+ * Documentation for foo
+ */
+
+function foo() {}"#;
+
+        let docs = extract_docs_before_line(source, 4);
+        assert!(docs.is_some());
+        assert!(docs.unwrap().contains("Documentation for foo"));
+    }
+
+    #[test]
+    fn test_no_docs_with_multiple_empty_lines() {
+        // Multiple empty lines mean the comment is not associated with the symbol
+        let source = r#"// File-level comment
+
+
+function foo() {}"#;
+
+        let docs = extract_docs_before_line(source, 3);
+        assert!(docs.is_none());
+    }
+
+    #[test]
+    fn test_no_docs_when_code_separates() {
+        // Code between comment and symbol means no association
+        let source = r#"// This is a file comment
+const x = 1;
+function foo() {}"#;
+
+        let docs = extract_docs_before_line(source, 2);
+        assert!(docs.is_none());
+    }
+
+    #[test]
+    fn test_extract_docs_direct_above() {
+        // Doc directly above symbol (no empty lines)
+        let source = r#"// File comment
+
+/**
+ * Function documentation
+ */
+function foo() {}"#;
+
+        let docs = extract_docs_before_line(source, 5);
+        assert!(docs.is_some());
+        let docs = docs.unwrap();
+        assert!(docs.contains("Function documentation"));
+        // Should NOT contain the file comment
+        assert!(!docs.contains("File comment"));
     }
 }

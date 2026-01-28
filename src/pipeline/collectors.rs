@@ -46,6 +46,9 @@ impl ResultCollector for DefinitionCollector {
             parser.parse_with_language(path, source_code, cached_content.modified_time)?;
 
         let mut definitions = Vec::new();
+        // Track seen definitions to eliminate duplicates from overlapping query patterns
+        // Key: (start_line, end_line, name)
+        let mut seen: HashSet<(usize, usize, String)> = HashSet::new();
         let query = language.definitions_query();
         let mappings = language.definition_mappings();
 
@@ -86,6 +89,13 @@ impl ResultCollector for DefinitionCollector {
                 if name_str == self.symbol {
                     let start_line = node.start_position().row + 1;
                     let end_line = node.end_position().row + 1;
+
+                    // Skip duplicate definitions (same location and name)
+                    let key = (start_line, end_line, name_str.to_string());
+                    if !seen.insert(key) {
+                        continue;
+                    }
+
                     let code = node
                         .utf8_text(source_code.as_bytes())
                         .unwrap_or("")
