@@ -154,7 +154,16 @@ fn parse_language_id(name: &str) -> Option<LanguageId> {
     match name.to_lowercase().as_str() {
         "typescript" | "ts" => Some(LanguageId::TypeScript),
         "typescriptreact" | "tsx" => Some(LanguageId::TypeScriptReact),
+        "javascript" | "js" => Some(LanguageId::JavaScript),
+        "javascriptreact" | "jsx" => Some(LanguageId::JavaScriptReact),
         "markdown" | "md" => Some(LanguageId::Markdown),
+        "html" => Some(LanguageId::Html),
+        "css" => Some(LanguageId::Css),
+        "python" | "py" => Some(LanguageId::Python),
+        "rust" | "rs" => Some(LanguageId::Rust),
+        "go" => Some(LanguageId::Go),
+        "java" => Some(LanguageId::Java),
+        "sql" => Some(LanguageId::Sql),
         _ => None,
     }
 }
