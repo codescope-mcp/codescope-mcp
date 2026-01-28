@@ -77,10 +77,6 @@ const SQL_DEFINITION_MAPPINGS: &[SymbolKindMapping] = &[
         kind: SymbolKind::Function,
     },
     SymbolKindMapping {
-        capture_name: "definition.procedure",
-        kind: SymbolKind::Procedure,
-    },
-    SymbolKindMapping {
         capture_name: "definition.index",
         kind: SymbolKind::Index,
     },
@@ -149,11 +145,11 @@ COMMENT ON COLUMN users.email IS 'User email address';
     fn print_node(node: &tree_sitter::Node, source: &str, indent: usize) {
         let prefix = " ".repeat(indent);
         let text = node.utf8_text(source.as_bytes()).unwrap_or("");
-        let short_text = if text.len() > 50 {
-            format!("{}...", &text[..50])
-        } else {
-            text.to_string()
-        };
+        let char_count = text.chars().count();
+        let mut short_text: String = text.chars().take(50).collect();
+        if char_count > 50 {
+            short_text.push_str("...");
+        }
         let short_text = short_text.replace('\n', "\\n");
 
         println!(
@@ -166,12 +162,14 @@ COMMENT ON COLUMN users.email IS 'User email address';
         );
 
         // Print field names
-        for i in 0..node.named_child_count() {
-            if let Some(child) = node.named_child(i) {
-                if let Some(field_name) = node.field_name_for_child(i as u32) {
-                    println!("{}  field: {}", prefix, field_name);
+        for i in 0..node.child_count() {
+            if let Some(child) = node.child(i) {
+                if child.is_named() {
+                    if let Some(field_name) = node.field_name_for_child(i as u32) {
+                        println!("{}  field: {}", prefix, field_name);
+                    }
+                    print_node(&child, source, indent + 2);
                 }
-                print_node(&child, source, indent + 2);
             }
         }
     }

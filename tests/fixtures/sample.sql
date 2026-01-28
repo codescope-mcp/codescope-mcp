@@ -63,11 +63,11 @@ FOR EACH ROW
 EXECUTE FUNCTION log_order_creation();
 
 -- Stored procedure (using CREATE FUNCTION for PostgreSQL compatibility)
-CREATE FUNCTION process_order(order_id INT)
+CREATE FUNCTION process_order(p_order_id INT)
 RETURNS VOID
 AS $$
 BEGIN
-    UPDATE orders SET status = 'processed' WHERE order_id = order_id;
+    UPDATE orders SET status = 'processed' WHERE order_id = p_order_id;
 END;
 $$;
 
