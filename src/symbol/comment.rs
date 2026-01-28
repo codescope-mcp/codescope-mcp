@@ -4,8 +4,26 @@ use anyhow::Result;
 
 use crate::symbol::types::{CodeSnippet, CommentMatch, CommentType};
 
-/// Find comments containing the specified text in a file
+/// Find comments containing the specified text in a file (C-style: // and /* */)
 pub fn find_comments_in_file(file_path: &Path, search_text: &str) -> Result<Vec<CommentMatch>> {
+    find_comments_with_prefix(file_path, search_text, "//")
+}
+
+/// Find comments containing the specified text in a SQL file (-- and /* */)
+pub fn find_comments_in_sql_file(file_path: &Path, search_text: &str) -> Result<Vec<CommentMatch>> {
+    find_comments_with_prefix(file_path, search_text, "--")
+}
+
+/// Internal helper that finds comments with configurable single-line prefix.
+///
+/// Supports:
+/// - Single-line comments with the specified prefix (e.g., "//" or "--")
+/// - Block comments with /* */
+fn find_comments_with_prefix(
+    file_path: &Path,
+    search_text: &str,
+    single_line_prefix: &str,
+) -> Result<Vec<CommentMatch>> {
     let source = std::fs::read_to_string(file_path)?;
     let file_path_str = file_path.to_string_lossy().to_string();
 
@@ -45,7 +63,7 @@ pub fn find_comments_in_file(file_path: &Path, search_text: &str) -> Result<Vec<
                     block_comment_start_col = end_pos + 2 + new_start;
                     block_comment_content = remaining[new_start..].to_string();
                     block_comment_content.push('\n');
-                } else if let Some(single_start) = remaining.find("//") {
+                } else if let Some(single_start) = remaining.find(single_line_prefix) {
                     let comment_content = remaining[single_start..].to_string();
                     if comment_content.contains(search_text) {
                         matches.push(CommentMatch {
@@ -71,7 +89,7 @@ pub fn find_comments_in_file(file_path: &Path, search_text: &str) -> Result<Vec<
                 // Check for block comment start
                 if let Some(block_start) = remaining.find("/*") {
                     // Check for single line comment before block comment
-                    if let Some(single_start) = remaining.find("//") {
+                    if let Some(single_start) = remaining.find(single_line_prefix) {
                         if single_start < block_start {
                             // Single line comment comes first
                             let comment_content = remaining[single_start..].to_string();
@@ -113,7 +131,7 @@ pub fn find_comments_in_file(file_path: &Path, search_text: &str) -> Result<Vec<
                         block_comment_content.push('\n');
                         break;
                     }
-                } else if let Some(single_start) = remaining.find("//") {
+                } else if let Some(single_start) = remaining.find(single_line_prefix) {
                     // Single line comment
                     let comment_content = remaining[single_start..].to_string();
                     if comment_content.contains(search_text) {
@@ -205,153 +223,6 @@ pub fn get_code_at_location(
         end_line: end_idx,
         code,
     })
-}
-
-/// Find comments containing the specified text in a SQL file
-///
-/// SQL supports:
-/// - `--` single-line comments
-/// - `/* */` block comments
-pub fn find_comments_in_sql_file(file_path: &Path, search_text: &str) -> Result<Vec<CommentMatch>> {
-    let source = std::fs::read_to_string(file_path)?;
-    let file_path_str = file_path.to_string_lossy().to_string();
-
-    let mut matches = Vec::new();
-    let mut in_block_comment = false;
-    let mut block_comment_start_line = 0;
-    let mut block_comment_start_col = 0;
-    let mut block_comment_content = String::new();
-
-    for (line_num, line) in source.lines().enumerate() {
-        let line_1indexed = line_num + 1;
-
-        if in_block_comment {
-            // Continue collecting block comment content
-            if let Some(end_pos) = line.find("*/") {
-                // Block comment ends on this line
-                block_comment_content.push_str(&line[..end_pos + 2]);
-                in_block_comment = false;
-
-                // Check if the block comment contains the search text
-                if block_comment_content.contains(search_text) {
-                    matches.push(CommentMatch {
-                        file_path: file_path_str.clone(),
-                        line: block_comment_start_line,
-                        column: block_comment_start_col,
-                        comment_type: CommentType::Block,
-                        content: block_comment_content.clone(),
-                    });
-                }
-                block_comment_content.clear();
-
-                // Check remaining content after block comment end
-                let remaining = &line[end_pos + 2..];
-                if let Some(new_start) = remaining.find("/*") {
-                    in_block_comment = true;
-                    block_comment_start_line = line_1indexed;
-                    block_comment_start_col = end_pos + 2 + new_start;
-                    block_comment_content = remaining[new_start..].to_string();
-                    block_comment_content.push('\n');
-                } else if let Some(single_start) = remaining.find("--") {
-                    let comment_content = remaining[single_start..].to_string();
-                    if comment_content.contains(search_text) {
-                        matches.push(CommentMatch {
-                            file_path: file_path_str.clone(),
-                            line: line_1indexed,
-                            column: end_pos + 2 + single_start,
-                            comment_type: CommentType::SingleLine,
-                            content: comment_content,
-                        });
-                    }
-                }
-            } else {
-                // Block comment continues
-                block_comment_content.push_str(line);
-                block_comment_content.push('\n');
-            }
-        } else {
-            // Not in a block comment, look for comment starts
-            let mut pos = 0;
-            while pos < line.len() {
-                let remaining = &line[pos..];
-
-                // Check for block comment start
-                if let Some(block_start) = remaining.find("/*") {
-                    // Check for single line comment before block comment
-                    if let Some(single_start) = remaining.find("--") {
-                        if single_start < block_start {
-                            // Single line comment comes first (rest of line is comment)
-                            let comment_content = remaining[single_start..].to_string();
-                            if comment_content.contains(search_text) {
-                                matches.push(CommentMatch {
-                                    file_path: file_path_str.clone(),
-                                    line: line_1indexed,
-                                    column: pos + single_start,
-                                    comment_type: CommentType::SingleLine,
-                                    content: comment_content,
-                                });
-                            }
-                            break;
-                        }
-                    }
-
-                    // Check if block comment ends on the same line
-                    let after_start = &remaining[block_start + 2..];
-                    if let Some(end_offset) = after_start.find("*/") {
-                        // Block comment ends on this line
-                        let comment_content =
-                            remaining[block_start..block_start + 2 + end_offset + 2].to_string();
-                        if comment_content.contains(search_text) {
-                            matches.push(CommentMatch {
-                                file_path: file_path_str.clone(),
-                                line: line_1indexed,
-                                column: pos + block_start,
-                                comment_type: CommentType::Block,
-                                content: comment_content,
-                            });
-                        }
-                        pos += block_start + 2 + end_offset + 2;
-                    } else {
-                        // Block comment continues to next line
-                        in_block_comment = true;
-                        block_comment_start_line = line_1indexed;
-                        block_comment_start_col = pos + block_start;
-                        block_comment_content = remaining[block_start..].to_string();
-                        block_comment_content.push('\n');
-                        break;
-                    }
-                } else if let Some(single_start) = remaining.find("--") {
-                    // SQL single line comment
-                    let comment_content = remaining[single_start..].to_string();
-                    if comment_content.contains(search_text) {
-                        matches.push(CommentMatch {
-                            file_path: file_path_str.clone(),
-                            line: line_1indexed,
-                            column: pos + single_start,
-                            comment_type: CommentType::SingleLine,
-                            content: comment_content,
-                        });
-                    }
-                    break;
-                } else {
-                    break;
-                }
-            }
-        }
-    }
-
-    // Handle case where file ends while still in a block comment
-    if in_block_comment && block_comment_content.contains(search_text) {
-        matches.push(CommentMatch {
-            file_path: file_path_str,
-            line: block_comment_start_line,
-            column: block_comment_start_col,
-            comment_type: CommentType::Block,
-            content: block_comment_content,
-        });
-    }
-
-    Ok(matches)
 }
 
 /// Extract documentation comments (JSDoc or regular comments) before a given line
