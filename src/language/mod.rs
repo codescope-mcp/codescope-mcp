@@ -1,3 +1,6 @@
+#[macro_use]
+mod macros;
+
 mod css;
 mod go;
 mod html;
