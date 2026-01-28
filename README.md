@@ -27,6 +27,7 @@ An MCP (Model Context Protocol) server that provides symbol analysis and code na
 | HTML | `.html`, `.htm` | Elements, IDs, Classes |
 | CSS | `.css` | Class Selectors, ID Selectors, Variables, Keyframes |
 | Markdown | `.md`, `.mdc` | Headings (H1-H6), Code Blocks, Link References |
+| SQL | `.sql` | Tables, Views, Procedures, Indexes, Triggers, Columns |
 
 ## Installation
 
@@ -116,6 +117,7 @@ All tools support the optional `language` parameter:
 - `"html"` - HTML files only
 - `"css"` - CSS files only
 - `"markdown"` or `"md"` - Markdown files only
+- `"sql"` - SQL files only
 - `null` or omitted - All supported languages
 
 ## Development

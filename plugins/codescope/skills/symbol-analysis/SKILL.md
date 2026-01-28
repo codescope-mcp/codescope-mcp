@@ -1,126 +1,146 @@
 ---
 name: symbol-analysis
-description: TypeScript/TSXコードベースのシンボル検索・解析
+description: AST-aware code search for TypeScript, JavaScript, Python, Rust, Go, Java, HTML, CSS, SQL, Markdown. Use instead of Grep/Read to find symbol definitions, symbol usages, method calls, imports, and comments. Provides precise results by parsing code structure.
 ---
 
-# CodeScope シンボル解析スキル
+# CodeScope Symbol Analysis Skill
 
-TypeScript/TSXプロジェクトのシンボル検索と解析を行うためのガイダンスです。
+AST-aware symbol search and code navigation for TypeScript, JavaScript, Python, Rust, Go, Java, HTML, CSS, SQL, and Markdown projects.
 
-## 利用可能なツール
+## When to Use CodeScope (vs Standard Tools)
 
-CodeScope MCPは以下のツールを提供します：
+### Use CodeScope when:
+
+| Task | CodeScope Tool | Instead of |
+|------|----------------|------------|
+| Find where a function/class is defined | `symbol_definition` | `grep "function name"` or `grep "class Name"` |
+| Find all usages of a symbol | `symbol_usages` | `grep "symbolName"` |
+| Find method calls like `obj.method()` | `find_method_calls` | `grep "\.method("` |
+| Find import statements | `find_imports` | `grep "import.*symbol"` |
+| Get full function/class code at a line | `get_symbol_at_location` | `Read` with manual line range |
+| Search TODO/FIXME in comments only | `find_in_comments` | `grep "TODO"` (matches non-comments too) |
+
+### Why CodeScope is Better for Symbol Analysis:
+
+- **AST-aware**: Parses code structure, distinguishes definitions from usages
+- **Precise**: Won't match partial names, strings, or comments accidentally
+- **Semantic**: Understands code constructs (methods vs functions, classes vs variables)
+- **Multi-language**: Same interface for all supported languages with language-specific understanding
+
+### Use Standard Tools (Grep/Read) when:
+
+- Searching for arbitrary text patterns (not code symbols)
+- Reading configuration files (JSON, YAML, TOML)
+- Searching in unsupported file types
+- Need regex pattern matching
+
+## Available Tools
 
 ### symbol_definition
-シンボル（関数、クラス、変数など）の定義を検索します。JSDocコメントも含めて取得できます。
+Find where symbols (functions, classes, variables, etc.) are defined. Can include JSDoc/docstring comments.
 
-**パラメータ:**
-- `symbol`: 検索するシンボル名（必須）
-- `include_docs`: JSDoc/コメントを含める（デフォルト: false）
-- `exclude_dirs`: 除外するディレクトリ（例: `["dist", "node_modules"]`）
-- `language`: 言語フィルタ（例: `"typescript"`, `"typescriptreact"`, `"markdown"`）
+**Parameters:**
+- `symbol`: Symbol name to search (required)
+- `include_docs`: Include JSDoc/comments (default: false)
+- `exclude_dirs`: Directories to exclude (e.g., `["dist", "node_modules"]`)
+- `language`: Language filter (e.g., `"typescript"`, `"python"`, `"rust"`, `"sql"`)
 
-### symbol_usages
-シンボルの使用箇所を検索します。
-
-**パラメータ:**
-- `symbol`: 検索するシンボル名（必須）
-- `include_contexts`: コンテキスト情報を含める（デフォルト: false）
-- `exclude_dirs`: 除外するディレクトリ
-- `language`: 言語フィルタ
-
-### find_method_calls
-メソッドや関数の呼び出し箇所を検索します（例: `Date.now()`, `array.map()`）。
-
-**パラメータ:**
-- `method_name`: メソッド/関数名（必須）
-- `object_name`: オブジェクト名でフィルタ（例: `"Date"` で `Date.now()` のみ検索）
-- `exclude_dirs`: 除外するディレクトリ
-- `language`: 言語フィルタ
-
-### find_imports
-インポート文を検索します。
-
-**パラメータ:**
-- `symbol`: シンボル名（必須）
-- `exclude_dirs`: 除外するディレクトリ
-- `language`: 言語フィルタ
-
-### find_in_comments
-コメント内のテキストを検索します（TODO、FIXME等）。
-
-**パラメータ:**
-- `text`: 検索テキスト（必須）
-- `exclude_dirs`: 除外するディレクトリ
-- `language`: 言語フィルタ
-
-### get_code_at_location
-指定した位置のコードスニペットを取得します。
-
-**パラメータ:**
-- `file_path`: ファイルパス（必須）
-- `line`: 行番号（1-indexed、必須）
-- `context_before`: 対象行の前に含める行数（デフォルト: 3）
-- `context_after`: 対象行の後に含める行数（デフォルト: 3）
-
-### get_symbol_at_location
-指定した行を含む最小のシンボル（関数、クラス、メソッドなど）を取得します。
-`symbol_usages`で使用箇所を見つけた後、その行の完全なコンテキストを取得するのに便利です。
-
-**パラメータ:**
-- `file_path`: ファイルパス（必須）
-- `line`: 行番号（1-indexed、必須）
-
-**戻り値:**
-- `name`: シンボル名
-- `node_kind`: 種類（Function, Class, Method, Constructor, Interface, ArrowFunction, Variable, Enum, TypeAlias）
-- `start_line`, `end_line`: シンボルの範囲
-- `code`: シンボルのコード全体
-
-## 使用例
-
-### シンボル定義の検索
-
-TypeScriptプロジェクトで`UserService`クラスの定義をJSDoc付きで探す場合：
-
+**Example:** Find `UserService` class definition with documentation:
 ```
 symbol_definition(symbol="UserService", include_docs=true)
 ```
 
-### シンボル使用箇所の検索
+### symbol_usages
+Find all places where a symbol is used (excluding its definition).
 
-特定の関数がどこで使われているか調べる場合：
+**Parameters:**
+- `symbol`: Symbol name to search (required)
+- `include_contexts`: Include surrounding code context (default: false)
+- `exclude_dirs`: Directories to exclude
+- `language`: Language filter
 
+**Example:** Find all usages of `handleRequest`:
 ```
 symbol_usages(symbol="handleRequest", include_contexts=true)
 ```
 
-### 使用箇所の詳細コンテキスト取得
+### find_method_calls
+Find method/function calls with optional object filtering (e.g., `Date.now()`, `array.map()`).
 
-1. まず使用箇所を検索：
-```
-symbol_usages(symbol="processData")
-```
+**Parameters:**
+- `method_name`: Method/function name (required)
+- `object_name`: Filter by object name (e.g., `"Date"` to find only `Date.now()`)
+- `exclude_dirs`: Directories to exclude
+- `language`: Language filter
 
-2. 見つかった行の包含シンボルを取得：
-```
-get_symbol_at_location(file_path="/path/to/file.ts", line=42)
-```
-
-これにより、`processData`が使用されている関数やメソッド全体のコードを取得できます。
-
-### メソッド呼び出しの検索
-
-`Date.now()`の呼び出し箇所のみを検索：
-
+**Example:** Find only `Date.now()` calls (not `performance.now()`):
 ```
 find_method_calls(method_name="now", object_name="Date")
 ```
 
-### TODOコメントの検索
+### find_imports
+Find import/require statements for a symbol.
 
-プロジェクト内のTODOコメントを検索：
+**Parameters:**
+- `symbol`: Symbol name (required)
+- `exclude_dirs`: Directories to exclude
+- `language`: Language filter
 
+**Example:** Find where `useState` is imported:
+```
+find_imports(symbol="useState")
+```
+
+### find_in_comments
+Search text within comments only (TODO, FIXME, etc.). Unlike Grep, this won't match code or strings.
+
+**Parameters:**
+- `text`: Search text (required)
+- `exclude_dirs`: Directories to exclude
+- `language`: Language filter
+
+**Example:** Find all TODO comments:
 ```
 find_in_comments(text="TODO")
 ```
+
+### get_code_at_location
+Get a code snippet at a specific file location with context lines.
+
+**Parameters:**
+- `file_path`: File path (required)
+- `line`: Line number, 1-indexed (required)
+- `context_before`: Lines before target (default: 3)
+- `context_after`: Lines after target (default: 3)
+
+### get_symbol_at_location
+Get the smallest enclosing symbol (function, class, method) at a specific line. Useful after `symbol_usages` to get full context.
+
+**Parameters:**
+- `file_path`: File path (required)
+- `line`: Line number, 1-indexed (required)
+
+**Returns:** Symbol name, kind, line range, and full code
+
+**Example workflow:**
+1. Find usages: `symbol_usages(symbol="processData")`
+2. Get full context: `get_symbol_at_location(file_path="src/handler.ts", line=42)`
+
+This retrieves the entire function where `processData` is called.
+
+## Supported Languages
+
+| Language | Extensions | Symbol Types |
+|----------|------------|--------------|
+| TypeScript | `.ts` | Functions, Classes, Methods, Interfaces, Enums, Variables, Type Aliases |
+| TypeScript React | `.tsx` | Same as TypeScript |
+| JavaScript | `.js`, `.mjs`, `.cjs` | Functions, Classes, Methods, Variables, Arrow Functions |
+| JavaScript React | `.jsx` | Same as JavaScript |
+| Python | `.py`, `.pyi` | Functions, Classes, Methods, Variables |
+| Rust | `.rs` | Functions, Structs, Enums, Traits, Impls, Methods, Modules, Macros |
+| Go | `.go` | Functions, Methods, Structs, Interfaces, Type Aliases |
+| Java | `.java` | Classes, Interfaces, Enums, Methods, Fields, Annotations |
+| HTML | `.html`, `.htm` | Elements, IDs, Classes |
+| CSS | `.css` | Selectors, Variables, Keyframes |
+| SQL | `.sql` | Tables, Views, Procedures, Indexes, Triggers |
+| Markdown | `.md`, `.mdc` | Headings, Code Blocks, Link References |
