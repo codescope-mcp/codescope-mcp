@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::Result;
 use streaming_iterator::StreamingIterator;
 
 use crate::context::extractor::extract_contexts;
-use crate::parser::GenericParser;
+use crate::parser::CachedParser;
 use crate::symbol::comment::{
     extract_docs_before_line, find_comments_in_file, find_comments_in_sql_file,
     find_text_in_markdown_file,
@@ -17,7 +18,12 @@ use crate::symbol::types::{CommentMatch, SymbolDefinition, SymbolKind, SymbolUsa
 pub trait ResultCollector: Sync {
     type Item: Send;
 
-    fn process_file(&self, parser: &mut GenericParser, path: &Path) -> Result<Vec<Self::Item>>;
+    fn process_file(
+        &self,
+        parser: &mut CachedParser,
+        path: &Path,
+        source_code: &Arc<String>,
+    ) -> Result<Vec<Self::Item>>;
 }
 
 /// Collector for symbol definitions
@@ -29,9 +35,13 @@ pub struct DefinitionCollector {
 impl ResultCollector for DefinitionCollector {
     type Item = SymbolDefinition;
 
-    fn process_file(&self, parser: &mut GenericParser, path: &Path) -> Result<Vec<Self::Item>> {
-        let source_code = std::fs::read_to_string(path)?;
-        let (tree, language) = parser.parse_with_language(path, &source_code)?;
+    fn process_file(
+        &self,
+        parser: &mut CachedParser,
+        path: &Path,
+        source_code: &Arc<String>,
+    ) -> Result<Vec<Self::Item>> {
+        let (tree, language) = parser.parse_with_language(path, source_code)?;
 
         let mut definitions = Vec::new();
         let query = language.definitions_query();
@@ -40,7 +50,7 @@ impl ResultCollector for DefinitionCollector {
         // For languages with separate doc statements (e.g., SQL COMMENT ON),
         // extract documentation map first
         let sql_comment_map = if self.include_docs && language.uses_separate_docs() {
-            Some(extract_sql_comments(&tree, &source_code, query))
+            Some(extract_sql_comments(&tree, source_code, query))
         } else {
             None
         };
@@ -86,7 +96,7 @@ impl ResultCollector for DefinitionCollector {
                                 SymbolKind::Column => {
                                     // For columns, use "table.column" key
                                     if let Some(table_name) =
-                                        find_parent_table_name(node, &source_code)
+                                        find_parent_table_name(node, source_code)
                                     {
                                         let key = format!("{}.{}", table_name, name_str);
                                         comment_map.get(&key).cloned()
@@ -101,7 +111,7 @@ impl ResultCollector for DefinitionCollector {
                             }
                         } else {
                             // For other languages: extract docs from comments before the definition
-                            extract_docs_before_line(&source_code, node.start_position().row)
+                            extract_docs_before_line(source_code, node.start_position().row)
                         }
                     } else {
                         None
@@ -135,9 +145,13 @@ pub struct UsageCollector {
 impl ResultCollector for UsageCollector {
     type Item = SymbolUsage;
 
-    fn process_file(&self, parser: &mut GenericParser, path: &Path) -> Result<Vec<Self::Item>> {
-        let source_code = std::fs::read_to_string(path)?;
-        let (tree, language) = parser.parse_with_language(path, &source_code)?;
+    fn process_file(
+        &self,
+        parser: &mut CachedParser,
+        path: &Path,
+        source_code: &Arc<String>,
+    ) -> Result<Vec<Self::Item>> {
+        let (tree, language) = parser.parse_with_language(path, source_code)?;
 
         let mut usages = Vec::new();
         let mut seen: HashSet<(usize, usize)> = HashSet::new();
@@ -176,7 +190,7 @@ impl ResultCollector for UsageCollector {
                     let (usage_kind, object_name) = if is_import {
                         (UsageKind::Import, None)
                     } else {
-                        extract_member_access_info(node, &source_code)
+                        extract_member_access_info(node, source_code)
                     };
 
                     if let Some(ref filter) = self.object_filter {
@@ -186,7 +200,7 @@ impl ResultCollector for UsageCollector {
                         }
                     }
 
-                    let contexts = extract_contexts(node, &source_code, self.max_contexts);
+                    let contexts = extract_contexts(node, source_code, self.max_contexts);
 
                     let qualified_name = match &object_name {
                         Some(obj) => format!("{}.{}", obj, self.symbol),
@@ -219,7 +233,12 @@ pub struct MethodCallCollector {
 impl ResultCollector for MethodCallCollector {
     type Item = SymbolUsage;
 
-    fn process_file(&self, parser: &mut GenericParser, path: &Path) -> Result<Vec<Self::Item>> {
+    fn process_file(
+        &self,
+        parser: &mut CachedParser,
+        path: &Path,
+        source_code: &Arc<String>,
+    ) -> Result<Vec<Self::Item>> {
         let collector = UsageCollector {
             symbol: self.method_name.clone(),
             include_imports: false,
@@ -227,7 +246,7 @@ impl ResultCollector for MethodCallCollector {
             object_filter: self.object_name.clone(),
         };
 
-        let usages = collector.process_file(parser, path)?;
+        let usages = collector.process_file(parser, path, source_code)?;
 
         // Filter for MethodCall only
         Ok(usages
@@ -245,7 +264,12 @@ pub struct ImportCollector {
 impl ResultCollector for ImportCollector {
     type Item = SymbolUsage;
 
-    fn process_file(&self, parser: &mut GenericParser, path: &Path) -> Result<Vec<Self::Item>> {
+    fn process_file(
+        &self,
+        parser: &mut CachedParser,
+        path: &Path,
+        source_code: &Arc<String>,
+    ) -> Result<Vec<Self::Item>> {
         let collector = UsageCollector {
             symbol: self.symbol.clone(),
             include_imports: true,
@@ -253,7 +277,7 @@ impl ResultCollector for ImportCollector {
             object_filter: None,
         };
 
-        let usages = collector.process_file(parser, path)?;
+        let usages = collector.process_file(parser, path, source_code)?;
 
         // Filter for Import only
         Ok(usages
@@ -271,7 +295,12 @@ pub struct CommentCollector {
 impl ResultCollector for CommentCollector {
     type Item = CommentMatch;
 
-    fn process_file(&self, _parser: &mut GenericParser, path: &Path) -> Result<Vec<Self::Item>> {
+    fn process_file(
+        &self,
+        _parser: &mut CachedParser,
+        path: &Path,
+        _source_code: &Arc<String>,
+    ) -> Result<Vec<Self::Item>> {
         let ext = path.extension().and_then(|ext| ext.to_str());
 
         match ext {
