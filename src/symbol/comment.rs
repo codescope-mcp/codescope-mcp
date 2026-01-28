@@ -4,8 +4,26 @@ use anyhow::Result;
 
 use crate::symbol::types::{CodeSnippet, CommentMatch, CommentType};
 
-/// Find comments containing the specified text in a file
+/// Find comments containing the specified text in a file (C-style: // and /* */)
 pub fn find_comments_in_file(file_path: &Path, search_text: &str) -> Result<Vec<CommentMatch>> {
+    find_comments_with_prefix(file_path, search_text, "//")
+}
+
+/// Find comments containing the specified text in a SQL file (-- and /* */)
+pub fn find_comments_in_sql_file(file_path: &Path, search_text: &str) -> Result<Vec<CommentMatch>> {
+    find_comments_with_prefix(file_path, search_text, "--")
+}
+
+/// Internal helper that finds comments with configurable single-line prefix.
+///
+/// Supports:
+/// - Single-line comments with the specified prefix (e.g., "//" or "--")
+/// - Block comments with /* */
+fn find_comments_with_prefix(
+    file_path: &Path,
+    search_text: &str,
+    single_line_prefix: &str,
+) -> Result<Vec<CommentMatch>> {
     let source = std::fs::read_to_string(file_path)?;
     let file_path_str = file_path.to_string_lossy().to_string();
 
@@ -45,7 +63,7 @@ pub fn find_comments_in_file(file_path: &Path, search_text: &str) -> Result<Vec<
                     block_comment_start_col = end_pos + 2 + new_start;
                     block_comment_content = remaining[new_start..].to_string();
                     block_comment_content.push('\n');
-                } else if let Some(single_start) = remaining.find("//") {
+                } else if let Some(single_start) = remaining.find(single_line_prefix) {
                     let comment_content = remaining[single_start..].to_string();
                     if comment_content.contains(search_text) {
                         matches.push(CommentMatch {
@@ -71,7 +89,7 @@ pub fn find_comments_in_file(file_path: &Path, search_text: &str) -> Result<Vec<
                 // Check for block comment start
                 if let Some(block_start) = remaining.find("/*") {
                     // Check for single line comment before block comment
-                    if let Some(single_start) = remaining.find("//") {
+                    if let Some(single_start) = remaining.find(single_line_prefix) {
                         if single_start < block_start {
                             // Single line comment comes first
                             let comment_content = remaining[single_start..].to_string();
@@ -113,7 +131,7 @@ pub fn find_comments_in_file(file_path: &Path, search_text: &str) -> Result<Vec<
                         block_comment_content.push('\n');
                         break;
                     }
-                } else if let Some(single_start) = remaining.find("//") {
+                } else if let Some(single_start) = remaining.find(single_line_prefix) {
                     // Single line comment
                     let comment_content = remaining[single_start..].to_string();
                     if comment_content.contains(search_text) {
@@ -357,5 +375,51 @@ function foo() {}"#;
         assert_eq!(matches[0].column, 0);
         assert_eq!(matches[1].column, 5);
         assert_eq!(matches[2].column, 10);
+    }
+
+    #[test]
+    fn test_find_sql_single_line_comments() {
+        let mut file = NamedTempFile::with_suffix(".sql").unwrap();
+        writeln!(file, "-- TODO: fix this query").unwrap();
+        writeln!(file, "SELECT * FROM users;").unwrap();
+        writeln!(file, "-- Another TODO here").unwrap();
+
+        let matches = find_comments_in_sql_file(file.path(), "TODO").unwrap();
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].line, 1);
+        assert_eq!(matches[0].comment_type, CommentType::SingleLine);
+        assert_eq!(matches[1].line, 3);
+    }
+
+    #[test]
+    fn test_find_sql_block_comments() {
+        let mut file = NamedTempFile::with_suffix(".sql").unwrap();
+        writeln!(file, "/* FIXME: broken query */").unwrap();
+        writeln!(file, "SELECT * FROM users;").unwrap();
+        writeln!(file, "/*").unwrap();
+        writeln!(file, " * Another FIXME").unwrap();
+        writeln!(file, " */").unwrap();
+
+        let matches = find_comments_in_sql_file(file.path(), "FIXME").unwrap();
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].comment_type, CommentType::Block);
+        assert_eq!(matches[1].comment_type, CommentType::Block);
+    }
+
+    #[test]
+    fn test_find_sql_mixed_comments() {
+        let mut file = NamedTempFile::with_suffix(".sql").unwrap();
+        writeln!(file, "-- TODO: single line").unwrap();
+        writeln!(file, "/* TODO: block comment */").unwrap();
+        writeln!(file, "SELECT * FROM users; -- inline TODO").unwrap();
+
+        let matches = find_comments_in_sql_file(file.path(), "TODO").unwrap();
+        assert_eq!(matches.len(), 3);
+        assert_eq!(matches[0].line, 1);
+        assert_eq!(matches[0].comment_type, CommentType::SingleLine);
+        assert_eq!(matches[1].line, 2);
+        assert_eq!(matches[1].comment_type, CommentType::Block);
+        assert_eq!(matches[2].line, 3);
+        assert_eq!(matches[2].comment_type, CommentType::SingleLine);
     }
 }

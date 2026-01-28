@@ -60,6 +60,10 @@ impl LanguageSupport for SqlLanguage {
     fn definition_mappings(&self) -> &[SymbolKindMapping] {
         SQL_DEFINITION_MAPPINGS
     }
+
+    fn uses_separate_docs(&self) -> bool {
+        true
+    }
 }
 
 /// Definition mappings for SQL

@@ -5,8 +5,10 @@ use std::sync::Arc;
 use codescope_mcp::language::LanguageRegistry;
 use codescope_mcp::parser::generic::GenericParser;
 use codescope_mcp::parser::typescript::TypeScriptParser;
+use codescope_mcp::pipeline::{DefinitionCollector, ResultCollector};
 use codescope_mcp::symbol::comment::{
-    find_comments_in_file, find_text_in_markdown_file, get_code_at_location,
+    find_comments_in_file, find_comments_in_sql_file, find_text_in_markdown_file,
+    get_code_at_location,
 };
 use codescope_mcp::symbol::definition::{find_definitions_in_file, find_symbol_at_location};
 use codescope_mcp::symbol::types::{CommentType, UsageKind};
@@ -2478,15 +2480,46 @@ fn test_sql_find_usages() {
     assert!(count > 0, "Should find 'users' usages in SQL file");
 }
 
-// Note: find_comments_in_file only supports // and /* */ style comments.
-// SQL uses -- for single-line comments which is not yet supported.
-// This test is commented out until SQL comment support is added.
-// #[test]
-// fn test_sql_find_todo_comments() {
-//     let file_path = fixtures_path().join("sample.sql");
-//     let matches = find_comments_in_file(&file_path, "TODO").expect("Failed to find comments");
-//     assert!(!matches.is_empty(), "Should find TODO comments in SQL file");
-// }
+#[test]
+fn test_sql_find_todo_comments() {
+    let file_path = fixtures_path().join("sample.sql");
+    let matches = find_comments_in_sql_file(&file_path, "TODO").expect("Failed to find comments");
+    assert!(!matches.is_empty(), "Should find TODO comments in SQL file");
+
+    // Verify comment type
+    assert_eq!(
+        matches[0].comment_type,
+        CommentType::SingleLine,
+        "SQL -- comments should be SingleLine type"
+    );
+}
+
+#[test]
+fn test_sql_find_fixme_comments() {
+    let file_path = fixtures_path().join("sample.sql");
+    let matches = find_comments_in_sql_file(&file_path, "FIXME").expect("Failed to find comments");
+    assert!(
+        !matches.is_empty(),
+        "Should find FIXME comments in SQL file"
+    );
+}
+
+#[test]
+fn test_sql_find_block_comments() {
+    let file_path = fixtures_path().join("sample.sql");
+    // The sample.sql file contains a multi-line block comment
+    let matches =
+        find_comments_in_sql_file(&file_path, "Multi-line").expect("Failed to find comments");
+    assert!(
+        !matches.is_empty(),
+        "Should find block comments in SQL file"
+    );
+    assert_eq!(
+        matches[0].comment_type,
+        CommentType::Block,
+        "/* */ comments should be Block type"
+    );
+}
 
 #[test]
 fn test_sql_generic_parser_handles_sql_files() {
@@ -2504,4 +2537,72 @@ fn test_sql_generic_parser_handles_sql_files() {
         "Should produce valid AST with children"
     );
     assert_eq!(lang.name(), "Sql", "Should use Sql language support");
+}
+
+#[test]
+fn test_sql_comment_on_table_docs() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.sql");
+
+    let collector = DefinitionCollector {
+        symbol: "users".to_string(),
+        include_docs: true,
+    };
+
+    let definitions = collector
+        .process_file(&mut parser, &file_path)
+        .expect("Failed to collect definitions");
+
+    // Find the table definition (not the column definitions)
+    let table_def = definitions
+        .iter()
+        .find(|d| d.node_kind == codescope_mcp::symbol::types::SymbolKind::Table);
+
+    assert!(table_def.is_some(), "Should find users table definition");
+    let table_def = table_def.unwrap();
+    assert!(
+        table_def.docs.is_some(),
+        "Table should have documentation from COMMENT ON"
+    );
+    assert!(
+        table_def.docs.as_ref().unwrap().contains("User accounts"),
+        "Documentation should contain 'User accounts'"
+    );
+}
+
+#[test]
+fn test_sql_comment_on_column_docs() {
+    let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
+    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let file_path = fixtures_path().join("sample.sql");
+
+    let collector = DefinitionCollector {
+        symbol: "email".to_string(),
+        include_docs: true,
+    };
+
+    let definitions = collector
+        .process_file(&mut parser, &file_path)
+        .expect("Failed to collect definitions");
+
+    // email column in users table should have docs
+    let email_def = definitions.iter().find(|d| {
+        d.node_kind == codescope_mcp::symbol::types::SymbolKind::Column && d.start_line < 20
+        // users table is defined early in the file
+    });
+
+    assert!(
+        email_def.is_some(),
+        "Should find email column definition in users table"
+    );
+    let email_def = email_def.unwrap();
+    assert!(
+        email_def.docs.is_some(),
+        "Column should have documentation from COMMENT ON"
+    );
+    assert!(
+        email_def.docs.as_ref().unwrap().contains("email address"),
+        "Documentation should contain 'email address'"
+    );
 }
