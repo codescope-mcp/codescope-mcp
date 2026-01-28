@@ -1,69 +1,16 @@
-use anyhow::{Context, Result};
-use tree_sitter::{Language, Query};
-
 use crate::symbol::types::SymbolKind;
 
-use super::traits::{LanguageId, LanguageSupport, SymbolKindMapping};
+use super::traits::SymbolKindMapping;
 
-/// SQL language support
-pub struct SqlLanguage {
-    language: Language,
-    definitions_query: Query,
-    usages_query: Query,
-}
-
-impl SqlLanguage {
-    pub fn new() -> Result<Self> {
-        let language: Language = tree_sitter_sequel::LANGUAGE.into();
-
-        let definitions_query_src = include_str!("../../queries/sql/definitions.scm");
-        let usages_query_src = include_str!("../../queries/sql/usages.scm");
-
-        let definitions_query = Query::new(&language, definitions_query_src)
-            .context("Failed to parse SQL definitions query")?;
-        let usages_query =
-            Query::new(&language, usages_query_src).context("Failed to parse SQL usages query")?;
-
-        Ok(Self {
-            language,
-            definitions_query,
-            usages_query,
-        })
-    }
-}
-
-impl LanguageSupport for SqlLanguage {
-    fn id(&self) -> LanguageId {
-        LanguageId::Sql
-    }
-
-    fn name(&self) -> &'static str {
-        "Sql"
-    }
-
-    fn file_extensions(&self) -> &[&'static str] {
-        &["sql"]
-    }
-
-    fn tree_sitter_language(&self) -> &Language {
-        &self.language
-    }
-
-    fn definitions_query(&self) -> &Query {
-        &self.definitions_query
-    }
-
-    fn usages_query(&self) -> &Query {
-        &self.usages_query
-    }
-
-    fn definition_mappings(&self) -> &[SymbolKindMapping] {
-        SQL_DEFINITION_MAPPINGS
-    }
-
-    fn uses_separate_docs(&self) -> bool {
-        true
-    }
+define_language! {
+    name: SqlLanguage,
+    id: Sql,
+    display_name: "Sql",
+    extensions: ["sql"],
+    tree_sitter_language: tree_sitter_sequel::LANGUAGE,
+    query_dir: "sql",
+    mappings: SQL_DEFINITION_MAPPINGS,
+    uses_separate_docs: true,
 }
 
 /// Definition mappings for SQL
@@ -96,7 +43,7 @@ const SQL_DEFINITION_MAPPINGS: &[SymbolKindMapping] = &[
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use tree_sitter::Language;
 
     /// Debug test to dump SQL AST structure.
     /// Run with: cargo test test_sql_ast_dump -- --ignored --nocapture
