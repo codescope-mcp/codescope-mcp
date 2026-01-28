@@ -11,9 +11,10 @@ use rmcp::{
 };
 use tokio::sync::RwLock;
 
+use crate::cache::CacheManager;
 use crate::config::CodeScopeConfig;
 use crate::language::LanguageRegistry;
-use crate::parser::GenericParser;
+use crate::parser::CachedParser;
 use crate::pipeline::{
     CommentCollector, DefinitionCollector, FilePipeline, ImportCollector, MethodCallCollector,
     UsageCollector,
@@ -31,6 +32,7 @@ pub struct CodeScopeServer {
     workspace_root: Arc<RwLock<Option<PathBuf>>>,
     config: Arc<RwLock<CodeScopeConfig>>,
     registry: Arc<LanguageRegistry>,
+    cache_manager: Arc<CacheManager>,
     tool_router: ToolRouter<Self>,
 }
 
@@ -54,6 +56,7 @@ impl CodeScopeServer {
             workspace_root: Arc::new(RwLock::new(None)),
             config: Arc::new(RwLock::new(CodeScopeConfig::default_config())),
             registry,
+            cache_manager: Arc::new(CacheManager::new()),
             tool_router: Self::tool_router(),
         }
     }
@@ -66,6 +69,7 @@ impl CodeScopeServer {
             workspace_root: Arc::new(RwLock::new(None)),
             config: Arc::new(RwLock::new(CodeScopeConfig::default_config())),
             registry,
+            cache_manager: Arc::new(CacheManager::new()),
             tool_router: Self::tool_router(),
         })
     }
@@ -101,10 +105,13 @@ impl CodeScopeServer {
         let workspace_root = self.get_workspace_root().await?;
         let config = self.config.read().await.clone();
 
-        Ok(
-            FilePipeline::new(self.registry.clone(), workspace_root, config)
-                .with_excludes(exclude_dirs),
+        Ok(FilePipeline::new(
+            self.registry.clone(),
+            workspace_root,
+            config,
+            self.cache_manager.clone(),
         )
+        .with_excludes(exclude_dirs))
     }
 
     /// Helper to serialize results to JSON
@@ -277,22 +284,28 @@ impl CodeScopeServer {
             ));
         }
 
-        // Read file and parse
-        let source_code = std::fs::read_to_string(&path)
+        // Read file and parse using cache
+        let cached_content = self
+            .cache_manager
+            .file_cache
+            .get_or_read(&path)
             .map_err(|e| McpError::internal_error(format!("Failed to read file: {}", e), None))?;
 
-        let mut parser = GenericParser::new(self.registry.clone()).map_err(|e| {
-            McpError::internal_error(format!("Failed to create parser: {}", e), None)
-        })?;
+        let mut parser = CachedParser::new(
+            self.registry.clone(),
+            self.cache_manager.parser_cache.clone(),
+        )
+        .map_err(|e| McpError::internal_error(format!("Failed to create parser: {}", e), None))?;
 
         let (tree, lang) = parser
-            .parse_with_language(&path, &source_code)
+            .parse_with_language(&path, &cached_content.content, cached_content.modified_time)
             .map_err(|e| McpError::internal_error(format!("Failed to parse file: {}", e), None))?;
 
         // Find the symbol containing the given line
         let target_line = line.saturating_sub(1); // Convert to 0-indexed
         let query = lang.definitions_query();
         let mappings = lang.definition_mappings();
+        let source_code = &cached_content.content;
 
         let mut cursor = tree_sitter::QueryCursor::new();
         use streaming_iterator::StreamingIterator;

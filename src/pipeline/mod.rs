@@ -11,9 +11,10 @@ use std::sync::Arc;
 use ignore::WalkBuilder;
 use rayon::prelude::*;
 
+use crate::cache::CacheManager;
 use crate::config::CodeScopeConfig;
 use crate::language::{LanguageId, LanguageRegistry};
-use crate::parser::GenericParser;
+use crate::parser::CachedParser;
 
 /// File processing pipeline
 ///
@@ -25,6 +26,7 @@ pub struct FilePipeline {
     config: CodeScopeConfig,
     additional_excludes: Option<Vec<String>>,
     language_filter: Option<LanguageId>,
+    cache_manager: Arc<CacheManager>,
 }
 
 impl FilePipeline {
@@ -32,6 +34,7 @@ impl FilePipeline {
         registry: Arc<LanguageRegistry>,
         workspace_root: PathBuf,
         config: CodeScopeConfig,
+        cache_manager: Arc<CacheManager>,
     ) -> Self {
         Self {
             registry,
@@ -39,6 +42,7 @@ impl FilePipeline {
             config,
             additional_excludes: None,
             language_filter: None,
+            cache_manager,
         }
     }
 
@@ -91,14 +95,15 @@ impl FilePipeline {
     ///
     /// # Implementation Note
     ///
-    /// Each parallel thread creates its own `GenericParser` instance because
+    /// Each parallel thread creates its own `CachedParser` instance because
     /// tree-sitter's `Parser` is not thread-safe and requires mutable access
     /// during parsing. This is a deliberate tradeoff: while creating multiple
     /// parser instances has some overhead, it enables parallel file processing
     /// which significantly improves performance for large codebases.
     ///
-    /// The `LanguageRegistry` is shared via `Arc` to avoid duplicating the
-    /// compiled queries and language grammars across threads.
+    /// The `LanguageRegistry` and `CacheManager` are shared via `Arc` to avoid
+    /// duplicating the compiled queries, language grammars, and cached data
+    /// across threads.
     pub fn process<C, T>(&self, collector: &C) -> Vec<T>
     where
         C: ResultCollector<Item = T> + Sync,
@@ -109,9 +114,21 @@ impl FilePipeline {
         files
             .par_iter()
             .filter_map(|file_path| {
+                // Read file content using shared cache
+                let source_code = match self.cache_manager.file_cache.get_or_read(file_path) {
+                    Ok(content) => content,
+                    Err(e) => {
+                        tracing::warn!("Failed to read {:?}: {}", file_path, e);
+                        return None;
+                    }
+                };
+
                 // Each thread needs its own Parser instance because tree-sitter's
                 // Parser requires mutable access and is not thread-safe.
-                let mut parser = match GenericParser::new(self.registry.clone()) {
+                let mut parser = match CachedParser::new(
+                    self.registry.clone(),
+                    self.cache_manager.parser_cache.clone(),
+                ) {
                     Ok(p) => p,
                     Err(e) => {
                         tracing::warn!("Failed to create parser: {}", e);
@@ -119,7 +136,7 @@ impl FilePipeline {
                     }
                 };
 
-                match collector.process_file(&mut parser, file_path) {
+                match collector.process_file(&mut parser, file_path, &source_code) {
                     Ok(items) => Some(items),
                     Err(e) => {
                         tracing::warn!("Failed to process {:?}: {}", file_path, e);

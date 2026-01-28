@@ -1,10 +1,12 @@
 use std::path::PathBuf;
-
 use std::sync::Arc;
+use std::time::SystemTime;
 
+use codescope_mcp::cache::CachedContent;
 use codescope_mcp::language::LanguageRegistry;
 use codescope_mcp::parser::generic::GenericParser;
 use codescope_mcp::parser::typescript::TypeScriptParser;
+use codescope_mcp::parser::{CachedParser, ParserCache};
 use codescope_mcp::pipeline::{DefinitionCollector, ResultCollector};
 use codescope_mcp::symbol::comment::{
     find_comments_in_file, find_comments_in_sql_file, find_text_in_markdown_file,
@@ -2542,8 +2544,18 @@ fn test_sql_generic_parser_handles_sql_files() {
 #[test]
 fn test_sql_comment_on_table_docs() {
     let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
-    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let cache = Arc::new(ParserCache::new());
+    let mut parser = CachedParser::new(registry, cache).expect("Failed to create parser");
     let file_path = fixtures_path().join("sample.sql");
+
+    let content = Arc::new(std::fs::read_to_string(&file_path).expect("Failed to read file"));
+    let modified_time = std::fs::metadata(&file_path)
+        .and_then(|m| m.modified())
+        .unwrap_or_else(|_| SystemTime::now());
+    let cached_content = CachedContent {
+        content,
+        modified_time,
+    };
 
     let collector = DefinitionCollector {
         symbol: "users".to_string(),
@@ -2551,7 +2563,7 @@ fn test_sql_comment_on_table_docs() {
     };
 
     let definitions = collector
-        .process_file(&mut parser, &file_path)
+        .process_file(&mut parser, &file_path, &cached_content)
         .expect("Failed to collect definitions");
 
     // Find the table definition (not the column definitions)
@@ -2574,8 +2586,18 @@ fn test_sql_comment_on_table_docs() {
 #[test]
 fn test_sql_comment_on_column_docs() {
     let registry = Arc::new(LanguageRegistry::new().expect("Failed to create registry"));
-    let mut parser = GenericParser::new(registry).expect("Failed to create parser");
+    let cache = Arc::new(ParserCache::new());
+    let mut parser = CachedParser::new(registry, cache).expect("Failed to create parser");
     let file_path = fixtures_path().join("sample.sql");
+
+    let content = Arc::new(std::fs::read_to_string(&file_path).expect("Failed to read file"));
+    let modified_time = std::fs::metadata(&file_path)
+        .and_then(|m| m.modified())
+        .unwrap_or_else(|_| SystemTime::now());
+    let cached_content = CachedContent {
+        content,
+        modified_time,
+    };
 
     let collector = DefinitionCollector {
         symbol: "email".to_string(),
@@ -2583,7 +2605,7 @@ fn test_sql_comment_on_column_docs() {
     };
 
     let definitions = collector
-        .process_file(&mut parser, &file_path)
+        .process_file(&mut parser, &file_path, &cached_content)
         .expect("Failed to collect definitions");
 
     // email column in users table should have docs
