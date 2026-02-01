@@ -1,9 +1,11 @@
 mod collectors;
+pub mod stats;
 
 pub use collectors::{
     CommentCollector, DefinitionCollector, ImportCollector, MethodCallCollector, ResultCollector,
-    UsageCollector,
+    StatsCollector, UsageCollector,
 };
+pub use stats::{aggregate_statistics, FileStatistics};
 
 use std::path::PathBuf;
 use std::sync::Arc;

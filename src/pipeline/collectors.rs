@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::Result;
@@ -7,6 +7,7 @@ use streaming_iterator::StreamingIterator;
 use crate::cache::CachedContent;
 use crate::context::extractor::extract_contexts;
 use crate::parser::CachedParser;
+use crate::pipeline::stats::{count_lines, FileStatistics};
 use crate::symbol::comment::{
     extract_docs_before_line, find_comments_in_file, find_comments_in_sql_file,
     find_text_in_markdown_file,
@@ -325,6 +326,83 @@ impl ResultCollector for CommentCollector {
             // Other files: // and /* */ comments
             _ => find_comments_in_file(path, &self.text),
         }
+    }
+}
+
+/// Collector for codebase statistics
+pub struct StatsCollector;
+
+impl ResultCollector for StatsCollector {
+    type Item = FileStatistics;
+
+    fn process_file(
+        &self,
+        parser: &mut CachedParser,
+        path: &Path,
+        cached_content: &CachedContent,
+    ) -> Result<Vec<Self::Item>> {
+        let source_code = &cached_content.content;
+        let (tree, language) =
+            parser.parse_with_language(path, source_code, cached_content.modified_time)?;
+
+        let language_id = language.id();
+
+        // Count lines
+        let (total_lines, code_lines, blank_lines, comment_lines) =
+            count_lines(source_code, language_id);
+
+        // Count symbols
+        let mut symbol_counts: HashMap<SymbolKind, usize> = HashMap::new();
+        let query = language.definitions_query();
+        let mappings = language.definition_mappings();
+
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let mut matches = cursor.matches(query, tree.root_node(), source_code.as_bytes());
+
+        // Track seen definitions to avoid duplicates
+        let mut seen: HashSet<(usize, usize, String)> = HashSet::new();
+
+        while let Some(m) = matches.next() {
+            let mut name: Option<&str> = None;
+            let mut definition_node: Option<tree_sitter::Node> = None;
+            let mut kind: Option<SymbolKind> = None;
+
+            for capture in m.captures {
+                let capture_name = &query.capture_names()[capture.index as usize];
+
+                if *capture_name == "name" {
+                    name = Some(capture.node.utf8_text(source_code.as_bytes()).unwrap_or(""));
+                } else {
+                    for mapping in mappings {
+                        if *capture_name == mapping.capture_name {
+                            definition_node = Some(capture.node);
+                            kind = Some(mapping.kind);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if let (Some(name_str), Some(node), Some(symbol_kind)) = (name, definition_node, kind) {
+                let start_line = node.start_position().row + 1;
+                let end_line = node.end_position().row + 1;
+
+                let key = (start_line, end_line, name_str.to_string());
+                if seen.insert(key) {
+                    *symbol_counts.entry(symbol_kind).or_insert(0) += 1;
+                }
+            }
+        }
+
+        Ok(vec![FileStatistics {
+            file_path: path.to_string_lossy().to_string(),
+            language_id,
+            total_lines,
+            code_lines,
+            blank_lines,
+            comment_lines,
+            symbol_counts,
+        }])
     }
 }
 

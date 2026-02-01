@@ -16,12 +16,12 @@ use crate::config::CodeScopeConfig;
 use crate::language::LanguageRegistry;
 use crate::parser::CachedParser;
 use crate::pipeline::{
-    CommentCollector, DefinitionCollector, FilePipeline, ImportCollector, MethodCallCollector,
-    UsageCollector,
+    aggregate_statistics, CommentCollector, DefinitionCollector, FilePipeline, ImportCollector,
+    MethodCallCollector, StatsCollector, UsageCollector,
 };
 use crate::server::types::{
     CodeAtLocationParams, CommentSearchParams, DefinitionParams, ImportsParams, MethodCallsParams,
-    SymbolAtLocationParams, SymbolAtLocationResponse, UsagesParams,
+    StatsParams, SymbolAtLocationParams, SymbolAtLocationResponse, UsagesParams,
 };
 use crate::symbol::comment::get_code_at_location;
 use crate::symbol::types::SymbolDefinition;
@@ -371,6 +371,29 @@ impl CodeScopeServer {
 
         Self::serialize_result(&response)
     }
+
+    #[tool(
+        description = "Get codebase statistics: file counts, line counts (code/blank/comment), symbol distribution by language. \
+        Uses AST analysis for accurate code vs comment distinction. \
+        Supports 12 languages: TypeScript, TSX, JavaScript, JSX, Python, Rust, Go, Java, HTML, CSS, SQL, Markdown."
+    )]
+    async fn codebase_stats(
+        &self,
+        Parameters(StatsParams {
+            exclude_dirs,
+            language,
+        }): Parameters<StatsParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let pipeline = self
+            .create_pipeline(exclude_dirs)
+            .await?
+            .with_language_filter(language);
+        let collector = StatsCollector;
+
+        let file_stats = pipeline.process(&collector);
+        let response = aggregate_statistics(file_stats);
+        Self::serialize_result(&response)
+    }
 }
 
 #[tool_handler]
@@ -386,7 +409,8 @@ impl ServerHandler for CodeScopeServer {
                 - find_method_calls: Search obj.method() patterns, filter by object (Date.now vs performance.now)\n\
                 - find_imports: Find import statements for a symbol\n\
                 - find_in_comments: Search ONLY in comments (TODO, FIXME, etc)\n\
-                - get_symbol_at_location: Get enclosing function/class at line number\n\n\
+                - get_symbol_at_location: Get enclosing function/class at line number\n\
+                - codebase_stats: Get codebase statistics (files, lines, symbols by language)\n\n\
                 GENERAL TOOLS:\n\
                 - symbol_definition: Find where symbols are defined (simple: just name, no path)\n\
                 - symbol_usages: Find all usages with classification (Import/MethodCall/etc)\n\
@@ -396,7 +420,8 @@ impl ServerHandler for CodeScopeServer {
                 - 'Find all Date.now() calls' → find_method_calls(method_name='now', object_name='Date')\n\
                 - 'Where is useState imported?' → find_imports(symbol='useState')\n\
                 - 'Find all TODOs in comments' → find_in_comments(text='TODO')\n\
-                - 'Get the function at line 42' → get_symbol_at_location(file_path='...', line=42)"
+                - 'Get the function at line 42' → get_symbol_at_location(file_path='...', line=42)\n\
+                - 'Show codebase stats' → codebase_stats()"
                     .to_string(),
             ),
         }

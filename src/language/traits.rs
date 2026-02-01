@@ -3,8 +3,9 @@ use tree_sitter::{Language, Query};
 use crate::symbol::types::SymbolKind;
 
 /// Unique identifier for a language
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum LanguageId {
+    #[default]
     TypeScript,
     TypeScriptReact,
     JavaScript,

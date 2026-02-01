@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -136,4 +138,69 @@ pub struct SymbolAtLocationResponse {
     /// Symbol definition at the location, if found
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbol: Option<SymbolDefinition>,
+}
+
+/// Parameters for codebase_stats tool
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct StatsParams {
+    /// Directories to exclude from analysis (e.g., ["dist", "node_modules"])
+    pub exclude_dirs: Option<Vec<String>>,
+
+    /// Filter by language (e.g., "typescript", "rust")
+    /// If not specified, analyzes all supported languages
+    pub language: Option<String>,
+}
+
+/// Response for codebase_stats tool
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct StatsResponse {
+    /// Overall summary statistics
+    pub summary: StatsSummary,
+    /// Statistics broken down by language
+    pub by_language: Vec<LanguageStats>,
+    /// Symbol statistics
+    pub symbols: SymbolStats,
+}
+
+/// Summary statistics for the codebase
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct StatsSummary {
+    /// Total number of files analyzed
+    pub total_files: usize,
+    /// Total number of lines
+    pub total_lines: usize,
+    /// Lines containing code (non-blank, non-comment)
+    pub code_lines: usize,
+    /// Blank lines
+    pub blank_lines: usize,
+    /// Comment lines
+    pub comment_lines: usize,
+    /// Total number of symbols found
+    pub total_symbols: usize,
+    /// Number of different languages detected
+    pub languages_count: usize,
+}
+
+/// Statistics for a single language
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LanguageStats {
+    /// Language name
+    pub language: String,
+    /// Number of files in this language
+    pub file_count: usize,
+    /// Total lines in this language
+    pub total_lines: usize,
+    /// Code lines in this language
+    pub code_lines: usize,
+    /// Percentage of total codebase (by code lines)
+    pub percentage: f64,
+}
+
+/// Symbol statistics
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct SymbolStats {
+    /// Count of symbols by kind (e.g., "Function": 89, "Class": 12)
+    pub by_kind: HashMap<String, usize>,
+    /// Average number of symbols per file
+    pub avg_symbols_per_file: f64,
 }
