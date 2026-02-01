@@ -1,6 +1,6 @@
 ---
 description: Find TODO/FIXME comments in code
-argument-hint: [search-text]
+argument-hint: <search-text>
 ---
 
 # /codescope:todos
@@ -8,10 +8,10 @@ argument-hint: [search-text]
 Search within comments only. Unlike grep, excludes code and strings.
 
 ## Usage
-/codescope:todos [search-text]
+/codescope:todos <search-text>
 
 ## Examples
-/codescope:todos           # Find all TODOs
+/codescope:todos TODO      # Find all TODOs
 /codescope:todos FIXME     # Find FIXMEs
 /codescope:todos refactor  # Find "refactor" in comments
 
