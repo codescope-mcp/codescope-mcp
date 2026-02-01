@@ -123,7 +123,7 @@ impl CodeScopeServer {
     }
 
     #[tool(
-        description = "Find symbol definitions in the codebase. Returns file path, line numbers, and source code for each definition found. Set include_docs=true to get JSDoc/comments. Supports TypeScript, TSX, and Markdown."
+        description = "Lightweight AST search for symbol definitions. Find functions, classes, methods, variables. Use include_docs=true for JSDoc/docstrings. Simple interface: just symbol name, no path required. Supports 12 languages: TypeScript, TSX, JavaScript, JSX, Python, Rust, Go, Java, HTML, CSS, SQL, Markdown."
     )]
     async fn symbol_definition(
         &self,
@@ -148,7 +148,7 @@ impl CodeScopeServer {
     }
 
     #[tool(
-        description = "Find all usages of a symbol in the codebase. Returns file path, line, column, and usage_kind. Set include_contexts=true for context info. Supports TypeScript, TSX, and Markdown."
+        description = "Find all usages of a symbol with usage classification (Import, MethodCall, PropertyAccess, TypeReference, Identifier). Use include_contexts=true for scope hierarchy. Supports 12 languages: TypeScript, TSX, JavaScript, JSX, Python, Rust, Go, Java, HTML, CSS, SQL, Markdown."
     )]
     async fn symbol_usages(
         &self,
@@ -179,7 +179,7 @@ impl CodeScopeServer {
     }
 
     #[tool(
-        description = "Find method/function calls. Use for patterns like Date.now() or array.map(). Specify object_name to filter by object (e.g., object_name='Date' for Date.now() only). Supports TypeScript and TSX."
+        description = "Find method/function calls like Date.now(), array.map(), console.log(). Use object_name to filter (e.g., object_name='Date' finds only Date.now(), not performance.now()). UNIQUE: No other tool can filter method calls by object. Supports: TypeScript, JavaScript."
     )]
     async fn find_method_calls(
         &self,
@@ -204,7 +204,7 @@ impl CodeScopeServer {
     }
 
     #[tool(
-        description = "Find import statements for a symbol. Use to understand module dependencies and where a symbol is imported from. Supports TypeScript and TSX."
+        description = "Find import/require statements for a symbol. See where and how a module is imported across the codebase. UNIQUE: Specialized import search, more precise than grep 'import'. Supports: TypeScript, JavaScript."
     )]
     async fn find_imports(
         &self,
@@ -225,7 +225,7 @@ impl CodeScopeServer {
     }
 
     #[tool(
-        description = "Search for text within comments (TypeScript/TSX) or full text (Markdown). Use to find TODOs, FIXMEs, or any text in comments."
+        description = "Search text ONLY within comments - excludes code and strings. Find TODO, FIXME, HACK, or any text in comments. UNIQUE: Comment-only search, grep cannot distinguish comments from code. Supports: TypeScript, JavaScript, Rust, Go, Java, HTML, CSS."
     )]
     async fn find_in_comments(
         &self,
@@ -246,7 +246,7 @@ impl CodeScopeServer {
     }
 
     #[tool(
-        description = "Get code at a specific file location. Use after find_in_comments or symbol_usages to see the actual code around a specific line."
+        description = "Get code snippet at a specific file:line with surrounding context. Use after grep or symbol_usages to see actual code around a match. Supports all text files."
     )]
     async fn get_code_at_location(
         &self,
@@ -268,7 +268,7 @@ impl CodeScopeServer {
     }
 
     #[tool(
-        description = "Get the enclosing symbol at a specific file location. Returns the full symbol (function, class, heading, etc.) that contains the given line. Use after symbol_usages to get the full context of where a symbol is used."
+        description = "Get the enclosing function/class/method at a specific line. Use after grep or symbol_usages to get full context. Example: Found 'handleError' at line 42 → get the entire function containing it. Supports: TypeScript, TSX, JavaScript, JSX, Python, Rust, Go, Java, HTML, CSS, SQL, Markdown."
     )]
     async fn get_symbol_at_location(
         &self,
@@ -381,19 +381,22 @@ impl ServerHandler for CodeScopeServer {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "CodeScope provides TypeScript/TSX/Markdown symbol search tools.\n\n\
-                TOOLS:\n\
-                - symbol_definition: Find where symbols are defined. Use include_docs=true for JSDoc.\n\
-                - symbol_usages: Find all usages of a symbol\n\
-                - find_method_calls: Find method calls (e.g., Date.now()). Use object_name to filter.\n\
+                "CodeScope: Lightweight AST-based code search (12 languages, no LSP required).\n\n\
+                UNIQUE TOOLS (not available elsewhere):\n\
+                - find_method_calls: Search obj.method() patterns, filter by object (Date.now vs performance.now)\n\
                 - find_imports: Find import statements for a symbol\n\
-                - find_in_comments: Search text in comments (TODO, FIXME, etc.)\n\
-                - get_code_at_location: Get code at a specific file:line\n\
-                - get_symbol_at_location: Get the enclosing symbol at a file:line\n\n\
-                WORKFLOW:\n\
-                1. Search with find_in_comments/symbol_usages\n\
-                2. Get code context with get_code_at_location(file_path, line)\n\
-                3. Get full symbol with get_symbol_at_location(file_path, line)"
+                - find_in_comments: Search ONLY in comments (TODO, FIXME, etc)\n\
+                - get_symbol_at_location: Get enclosing function/class at line number\n\n\
+                GENERAL TOOLS:\n\
+                - symbol_definition: Find where symbols are defined (simple: just name, no path)\n\
+                - symbol_usages: Find all usages with classification (Import/MethodCall/etc)\n\
+                - get_code_at_location: Get code snippet at file:line\n\n\
+                LANGUAGES: TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, HTML, CSS, SQL, Markdown\n\n\
+                USE CASES:\n\
+                - 'Find all Date.now() calls' → find_method_calls(method_name='now', object_name='Date')\n\
+                - 'Where is useState imported?' → find_imports(symbol='useState')\n\
+                - 'Find all TODOs in comments' → find_in_comments(text='TODO')\n\
+                - 'Get the function at line 42' → get_symbol_at_location(file_path='...', line=42)"
                     .to_string(),
             ),
         }
